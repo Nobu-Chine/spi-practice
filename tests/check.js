@@ -9,7 +9,7 @@ const RUNS = 1000;
 const SAMPLE_COUNT = 5;
 const BROKEN_TEXT = /NaN|undefined|Infinity|\{|\}/;
 
-function checkProblem(template, q) {
+function checkProblem(template, q, settings) {
   const errors = [];
   if (!Number.isInteger(q.answer) || q.answer <= 0) errors.push(`答えが正の整数でない: ${q.answer}`);
   const solved = template.solve(q.params);
@@ -34,7 +34,7 @@ function checkProblem(template, q) {
   }
   if (q.explanation.length === 0) errors.push('解説が空');
   // テンプレート独自のルール（例：損益算の赤字禁止）
-  errors.push(...(template.validate?.(q.params) ?? []));
+  errors.push(...(template.validate?.(q.params, settings) ?? []));
   return errors;
 }
 
@@ -52,7 +52,7 @@ categories.forEach((category, ci) => {
         const seed = (ci + 1) * 1_000_000 + ti * 100_000 + (calculator ? 50_000 : 0) + i;
         const rand = createRandom(seed);
         const q = buildChoices(template.generate(rand, { calculator }), rand);
-        const errors = checkProblem(template, q);
+        const errors = checkProblem(template, q, { calculator });
         if (errors.length) failures.push({ seed, errors, text: q.text });
         else ok++;
         fillerCount += q.choices.filter((c, idx) => idx !== q.answerIndex && c.mistake === null).length;

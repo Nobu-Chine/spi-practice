@@ -12,14 +12,18 @@ function bottomOf(n, den) {
   return den / gcd(n, den);
 }
 
-// 利益が出る「a%増し・b%引き」の組を選び、定価・売値が整数になる原価を決める
-function pickDeal(rand, calculator, preferWrong) {
+// 利益の割合（原価を10000としたとき）。0より大きければ黒字
+const gainOf = (a, b) => (100 + a) * (100 - b) - 10000;
+
+// 利益が出る「a%増し・b%引き」の組を選び、定価・売値が整数になる原価を決める。
+// 電卓なしのときは markups / discounts から選び、acceptPair で組み合わせをさらに絞れる
+function pickDeal(rand, calculator, preferWrong, { markups = NICE_MARKUPS, discounts = NICE_DISCOUNTS, acceptPair = () => true } = {}) {
   let a;
   let b;
   do {
-    a = calculator ? rand.int(10, 60) : rand.pick(NICE_MARKUPS);
-    b = calculator ? rand.int(5, 40) : rand.pick(NICE_DISCOUNTS);
-  } while ((100 + a) * (100 - b) <= 10000);
+    a = calculator ? rand.int(10, 60) : rand.pick(markups);
+    b = calculator ? rand.int(5, 40) : rand.pick(discounts);
+  } while (gainOf(a, b) <= 0 || (!calculator && !acceptPair(a, b)));
 
   // 定価（原価×(100+a)/100）と売値（原価×(100+a)(100−b)/10000）が割り切れる原価の刻み
   const step = lcm(bottomOf(100 + a, 100), bottomOf((100 + a) * (100 - b), 10000));
@@ -34,8 +38,14 @@ function pickDeal(rand, calculator, preferWrong) {
 
 // check.js が使う独自チェック：赤字の組み合わせが混じっていないか
 function validateNoLoss({ a, b }) {
-  return (100 + a) * (100 - b) > 10000 ? [] : [`赤字になる組み合わせ: ${a}%増し・${b}%引き`];
+  return gainOf(a, b) > 0 ? [] : [`赤字になる組み合わせ: ${a}%増し・${b}%引き`];
 }
+
+// 損益算Bの電卓なし用：「1 ÷ 利益の割合」が整数になる組み合わせだけ使う。
+// 割り算の代わりに整数を掛ければ済む（0.04→×25、0.05→×20、0.125→×8、0.2→×5）
+const COST_MARKUPS = [...NICE_MARKUPS, 60, 75];
+const COST_DISCOUNTS = [...NICE_DISCOUNTS, 40];
+const isEasyGain = (a, b) => gainOf(a, b) > 0 && Number.isInteger(10000 / gainOf(a, b));
 
 // 小数で表す（125 → 1.25）。整数どうしで1回だけ割るので、0.1+0.2 のような誤差が出ない
 const rateText = (numerator, den) => String(numerator / den);
@@ -77,12 +87,15 @@ const profitFromDeal = {
 const costFromProfit = {
   id: 'profit-cost',
   generate(rand, { calculator }) {
-    // 代表的なミス（利益が原価の(a−b)%だと考える）も整数になる原価を優先する
-    const { a, b, cost, list, sell, profit } = pickDeal(rand, calculator, (c, a, b) => {
-      const p = (c * ((100 + a) * (100 - b) - 10000)) / 10000;
-      return (p * 100) / (a - b);
-    });
-    const gain = (100 + a) * (100 - b) - 10000; // 利益の割合（原価を10000としたとき）
+    // 代表的なミス（利益が原価の(a−b)%だと考える）も整数になる原価を優先する。
+    // 電卓なしでは、利益の割合が割りやすい組み合わせだけ使う
+    const { a, b, cost, list, sell, profit } = pickDeal(
+      rand,
+      calculator,
+      (c, a, b) => ((c * gainOf(a, b)) / 10000) * 100 / (a - b),
+      { markups: COST_MARKUPS, discounts: COST_DISCOUNTS, acceptPair: isEasyGain },
+    );
+    const gain = gainOf(a, b); // 利益の割合（原価を10000としたとき）
 
     return {
       params: { a, b, profit },
@@ -107,7 +120,13 @@ const costFromProfit = {
   solve({ a, b, profit }) {
     return (profit * 10000) / ((100 + a) * (100 - b) - 10000);
   },
-  validate: validateNoLoss,
+  validate(params, { calculator }) {
+    const errors = validateNoLoss(params);
+    if (!calculator && !isEasyGain(params.a, params.b)) {
+      errors.push(`電卓なしなのに割りにくい利益の割合: ${gainOf(params.a, params.b) / 10000}`);
+    }
+    return errors;
+  },
 };
 
 export default {
