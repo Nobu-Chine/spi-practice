@@ -34,4 +34,6 @@
 - 時間を分数で書くときは「2分の3時間」ではなく小数（1.5時間）か「1/3時間」と書く（「2分」と読み違えるため）
 - `node tests/check.js <分野id>` で見本をその分野だけに絞れる
 - 解説の1行は文字のほか `{ type: 'table', headers, cells, highlight }` にでき、画面では表になる（highlight は答えのマスで、check.js が答えと一致するか検査する）。集合は「Aだけ・両方・Bだけ・どちらでもない・合計」の表 → 式の順で解説する
+- 「AIに質問用にコピー」：文章づくりは `core/ask-text.js`（`quiz.review()` のデータだけを使う）、コピーは `ui/clipboard.js`、view.js はボタンと「コピーしました」の表示だけ。iPhone はボタンを押した流れの中でないとコピーを断るので、main.js の onCopy で押された直後に copyText を呼ぶ。check.js はコピー文も全問検査する
+- 数字の書き方（`formatValue`）と解説の表の文字化（`explanationLineText`）は `core/format.js` にまとめ、画面・コピー文・check.js で共通に使う
 - 解説の表はスマホ幅（320px）でもはみ出さないことを確認済み。見出しの折り返し位置は ​ で指定する

@@ -20,6 +20,7 @@ export function createQuiz({ categoryIds, generate, settings, rand, saveResult, 
   let records = [];
   let shownAt = 0;
   let answered = false;
+  let lastChoice = null;
 
   // 出題する分野の並び。全分野ミックスは均等に配る（4分野なら 3・3・2・2 問）
   function pickCategoryIds(modeId) {
@@ -82,6 +83,7 @@ export function createQuiz({ categoryIds, generate, settings, rand, saveResult, 
     const q = questions[index];
     const timedOut = choiceIndex === null;
     const correct = !timedOut && choiceIndex === q.answerIndex;
+    lastChoice = choiceIndex;
     records.push({ category: q.category, correct, timedOut, timeMs: Math.min(now() - shownAt, limitMs) });
 
     return {
@@ -95,6 +97,20 @@ export function createQuiz({ categoryIds, generate, settings, rand, saveResult, 
       mistake: correct || timedOut ? null : q.choices[choiceIndex].mistake,
       explanation: q.explanation,
       isLast: index === questions.length - 1,
+    };
+  }
+
+  // 答えたあとの今の問題を、ふり返り用（AIへの質問のコピーなど）にまとめて返す
+  function review() {
+    if (records.length !== index + 1) return null; // 今の問題にまだ答えていない
+    const q = questions[index];
+    const last = records[records.length - 1];
+    return {
+      ...current(),
+      chosenIndex: last.timedOut ? null : lastChoice,
+      timedOut: last.timedOut,
+      answerIndex: q.answerIndex,
+      explanation: q.explanation,
     };
   }
 
@@ -116,5 +132,5 @@ export function createQuiz({ categoryIds, generate, settings, rand, saveResult, 
     answered = true;
   }
 
-  return { start, answer, next, finish, abort };
+  return { start, answer, review, next, finish, abort };
 }

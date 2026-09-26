@@ -4,15 +4,50 @@
 import { categories } from '../js/generators/index.js';
 import { buildChoices, fillerLimit } from '../js/core/choices.js';
 import { createRandom } from '../js/core/random.js';
+import { formatValue, explanationLineText } from '../js/core/format.js';
+import { buildAskText } from '../js/core/ask-text.js';
 
 const RUNS = 1000;
 const SAMPLE_COUNT = 5;
-const BROKEN_TEXT = /NaN|undefined|Infinity|\{|\}/;
+const BROKEN_TEXT = /NaN|undefined|Infinity|\{|\}|\[object/;
+const ASK_LAST_LINE = 'この問題について質問です：';
 
-// 解説の1行を文字にする（表は「見出し：値」を並べる。答えのマスには ★）
-function lineText(line) {
-  if (typeof line === 'string') return line;
-  return line.headers.map((h, i) => `${h}：${line.cells[i]}${i === line.highlight ? '★' : ''}`).join(' ｜ ');
+// 解説の1行を文字にする（表の答えのマスには ★）
+const lineText = (line) => explanationLineText(line, { mark: '★' });
+
+// quiz.review() と同じ形のデータを作る
+function reviewOf(category, q, chosenIndex) {
+  return {
+    categoryLabel: category.label,
+    text: q.text,
+    choices: q.choices.map((c) => c.value),
+    unit: q.unit,
+    prefix: q.prefix ?? '',
+    chosenIndex,
+    timedOut: chosenIndex === null,
+    answerIndex: q.answerIndex,
+    explanation: q.explanation,
+  };
+}
+
+// 「AIに質問用にコピー」の文章：必要な情報がそろっていて、崩れていないか
+function checkAskText(category, q) {
+  const errors = [];
+  const wrongIndex = q.choices.findIndex((_, i) => i !== q.answerIndex);
+  for (const chosen of [wrongIndex, null]) {
+    const ask = buildAskText(reviewOf(category, q, chosen));
+    const label = chosen === null ? '時間切れ' : '不正解';
+    const must = [
+      `分野：${category.label}`,
+      q.text,
+      ...q.choices.map((c) => formatValue(c.value, q.unit, q.prefix)),
+      chosen === null ? '時間切れ' : '（不正解）',
+    ];
+    for (const part of must) if (!ask.includes(part)) errors.push(`コピー文（${label}）に「${part}」がない`);
+    if (!ask.endsWith(ASK_LAST_LINE)) errors.push(`コピー文（${label}）の最後が「${ASK_LAST_LINE}」でない`);
+    if (BROKEN_TEXT.test(ask) || ask.includes('​')) errors.push(`コピー文（${label}）が壊れている`);
+  }
+  return errors;
 }
 
 function checkProblem(template, q, settings) {
@@ -65,7 +100,7 @@ categories.forEach((category, ci) => {
         const seed = (ci + 1) * 1_000_000 + ti * 100_000 + (calculator ? 50_000 : 0) + i;
         const rand = createRandom(seed);
         const q = buildChoices(template.generate(rand, { calculator }), rand);
-        const errors = checkProblem(template, q, { calculator });
+        const errors = [...checkProblem(template, q, { calculator }), ...checkAskText(category, q)];
         if (errors.length) failures.push({ seed, errors, text: q.text });
         else ok++;
         fillerCount += q.choices.filter((c, idx) => idx !== q.answerIndex && c.mistake === null).length;

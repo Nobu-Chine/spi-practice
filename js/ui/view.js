@@ -1,9 +1,10 @@
 // 画面の表示とボタン操作だけを担当する。
 // 計算・採点はしない。進行役から受け取ったデータを表示し、押されたボタンを知らせるだけ。
+import { formatValue } from '../core/format.js';
+
 const $ = (id) => document.getElementById(id);
 
-// prefix は「時速48km」の「時速」のように数字の前につく言葉
-const formatValue = (value, unit, prefix = '') => `${prefix}${value.toLocaleString('ja-JP')}${unit}`;
+const COPY_MESSAGE_MS = 2000;
 const formatPercent = (correct, total) => (total ? `${Math.round((correct / total) * 100)}%` : '—');
 function formatTime(ms) {
   const s = Math.round(ms / 1000);
@@ -43,9 +44,10 @@ function explanationItem(line) {
   return item;
 }
 
-export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, onHome, onClearHistory }) {
+export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, onHome, onClearHistory, onCopy }) {
   const screens = { home: $('screen-home'), question: $('screen-question'), result: $('screen-result') };
   let lastMode = null;
+  let copyMessageTimer = null;
 
   function showScreen(name) {
     for (const [key, node] of Object.entries(screens)) node.hidden = key !== name;
@@ -61,6 +63,7 @@ export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, 
     if (button && !button.disabled) onChoose(Number(button.dataset.index));
   });
   $('next-button').addEventListener('click', () => onNext());
+  $('copy-button').addEventListener('click', () => onCopy());
   $('quit-button').addEventListener('click', () => {
     if (confirm('この回をやめますか？（この回の成績は記録されません）')) onQuit();
   });
@@ -141,9 +144,24 @@ export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, 
     $('fb-mistake').textContent = fb.mistake ? `よくあるミス：${fb.mistake}` : '';
     $('fb-steps').replaceChildren(...explanationItems(fb.explanation));
     $('next-button').textContent = fb.isLast ? '結果を見る' : '次の問題へ';
+    clearCopyMessage();
 
     $('feedback').hidden = false;
     $('feedback').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // コピーの結果を短く表示して、少したったら消す
+  function showCopyResult(ok) {
+    const message = $('copy-message');
+    message.textContent = ok ? 'コピーしました' : 'コピーできませんでした';
+    message.className = `copy-message ${ok ? 'ok' : 'ng'}`;
+    clearTimeout(copyMessageTimer);
+    copyMessageTimer = setTimeout(clearCopyMessage, COPY_MESSAGE_MS);
+  }
+
+  function clearCopyMessage() {
+    clearTimeout(copyMessageTimer);
+    $('copy-message').textContent = '';
   }
 
   function showResult(result) {
@@ -169,5 +187,5 @@ export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, 
     showScreen('result');
   }
 
-  return { showHome, showQuestion, showTime, showFeedback, showResult };
+  return { showHome, showQuestion, showTime, showFeedback, showCopyResult, showResult };
 }

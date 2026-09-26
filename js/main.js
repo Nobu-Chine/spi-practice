@@ -6,6 +6,8 @@ import { createQuiz } from './core/quiz.js';
 import { analyzeHistory } from './core/stats.js';
 import { loadHistory, saveResult, clearHistory } from './storage/history.js';
 import { createView } from './ui/view.js';
+import { copyText } from './ui/clipboard.js';
+import { buildAskText } from './core/ask-text.js';
 
 const categoryIds = categories.map((c) => c.id);
 const categoryLabels = Object.fromEntries(categories.map((c) => [c.id, c.label]));
@@ -43,6 +45,11 @@ const view = createView({
   onClearHistory: () => {
     clearHistory();
     showHome();
+  },
+  // iPhone はボタンを押した流れの中でないとコピーできないので、押されたらすぐ copyText を呼ぶ
+  onCopy: () => {
+    const review = quiz.review();
+    if (review) copyText(buildAskText(review)).then((ok) => view.showCopyResult(ok));
   },
 });
 
