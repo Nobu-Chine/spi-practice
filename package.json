@@ -1,0 +1,9 @@
+{
+  "name": "spi-practice",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx serve .",
+    "check": "node tests/check.js"
+  }
+}

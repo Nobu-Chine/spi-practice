@@ -1,0 +1,87 @@
+// 問題生成のチェック。全テンプレートを「電卓なし」「電卓あり」でそれぞれ大量に作り、おかしな問題がないか確かめる。
+// 使い方： node tests/check.js
+import { categories } from '../js/generators/index.js';
+import { buildChoices } from '../js/core/choices.js';
+import { createRandom } from '../js/core/random.js';
+
+const RUNS = 1000;
+const SAMPLE_COUNT = 5;
+const BROKEN_TEXT = /NaN|undefined|Infinity|\{|\}/;
+
+function checkProblem(template, q) {
+  const errors = [];
+  if (!Number.isInteger(q.answer) || q.answer <= 0) errors.push(`答えが正の整数でない: ${q.answer}`);
+  const solved = template.solve(q.params);
+  if (solved !== q.answer) errors.push(`検算と答えが合わない: 検算=${solved} 答え=${q.answer}`);
+
+  const values = q.choices.map((c) => c.value);
+  if (values.length !== 4) errors.push(`選択肢が4つでない: ${values.length}個`);
+  if (new Set(values).size !== values.length) errors.push(`選択肢が重複: ${values}`);
+  if (values.some((v) => !Number.isInteger(v) || v <= 0)) errors.push(`選択肢に正の整数でないもの: ${values}`);
+  if (values[q.answerIndex] !== q.answer) errors.push('正解の位置がずれている');
+
+  for (const line of [q.text, ...q.explanation]) {
+    if (BROKEN_TEXT.test(line)) errors.push(`文章が壊れている: ${line}`);
+  }
+  if (q.explanation.length === 0) errors.push('解説が空');
+  return errors;
+}
+
+let totalFailures = 0;
+const rows = [];
+
+categories.forEach((category, ci) => {
+  category.templates.forEach((template, ti) => {
+    for (const calculator of [false, true]) {
+      let ok = 0;
+      let fillerCount = 0;
+      const failures = [];
+      for (let i = 0; i < RUNS; i++) {
+        // 失敗したときに同じ問題を再現できるよう、1問ごとに seed を決めておく
+        const seed = (ci + 1) * 1_000_000 + ti * 100_000 + (calculator ? 50_000 : 0) + i;
+        const rand = createRandom(seed);
+        const q = buildChoices(template.generate(rand, { calculator }), rand);
+        const errors = checkProblem(template, q);
+        if (errors.length) failures.push({ seed, errors, text: q.text });
+        else ok++;
+        fillerCount += q.choices.filter((c, idx) => idx !== q.answerIndex && c.mistake === null).length;
+      }
+      totalFailures += failures.length;
+      rows.push({
+        分野: category.label,
+        テンプレート: template.id,
+        電卓: calculator ? 'あり' : 'なし',
+        OK: ok,
+        NG: failures.length,
+        '誤答のうちミス由来': `${Math.round((1 - fillerCount / (RUNS * 3)) * 100)}%`,
+      });
+      for (const f of failures.slice(0, 3)) {
+        console.log(`NG seed=${f.seed} ${template.id}: ${f.text}`);
+        for (const e of f.errors) console.log(`   - ${e}`);
+      }
+    }
+  });
+});
+
+console.log(`\n=== チェック結果（各 ${RUNS} 問） ===`);
+console.table(rows);
+console.log(totalFailures === 0 ? '→ すべてOK' : `→ NG が ${totalFailures} 件あります`);
+
+// 見本の問題（電卓なし）。テンプレートを順番に使う
+console.log(`\n=== 見本の問題 ${SAMPLE_COUNT}問（電卓なし） ===`);
+const sampleRand = createRandom(20260926);
+const allTemplates = categories.flatMap((c) => c.templates.map((t) => ({ category: c, template: t })));
+for (let i = 0; i < SAMPLE_COUNT; i++) {
+  const { category, template } = allTemplates[i % allTemplates.length];
+  const q = buildChoices(template.generate(sampleRand, { calculator: false }), sampleRand);
+  console.log(`\n【${i + 1}】${category.label}（${template.id}）`);
+  console.log(q.text);
+  q.choices.forEach((c, idx) => {
+    const mark = idx === q.answerIndex ? '← 正解' : c.mistake ? `← ミス: ${c.mistake}` : '← 近い数（補充）';
+    console.log(`  ${'ABCD'[idx]}. ${c.value}${q.unit}  ${mark}`);
+  });
+  console.log('  解説:');
+  for (const line of q.explanation) console.log(`   ・${line}`);
+}
+
+process.exitCode = totalFailures === 0 ? 0 : 1;

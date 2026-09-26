@@ -1,0 +1,165 @@
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --text: #1f2328;
+  --muted: #656d76;
+  --line: #d8dee4;
+  --accent: #2563eb;
+  --accent-text: #ffffff;
+  --ok: #1a7f37;
+  --ok-bg: #dafbe1;
+  --ng: #cf222e;
+  --ng-bg: #ffebe9;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --text: #e6edf3;
+    --muted: #8d96a0;
+    --line: #30363d;
+    --accent: #4c8dff;
+    --ok: #3fb950;
+    --ok-bg: #12261e;
+    --ng: #f85149;
+    --ng-bg: #2d1418;
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  line-height: 1.7;
+  -webkit-text-size-adjust: 100%;
+}
+
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px 16px 48px;
+}
+
+h1 { font-size: 1.4rem; margin: 8px 0 0; }
+h2 { font-size: 0.95rem; color: var(--muted); margin: 24px 0 8px; }
+p { margin: 8px 0; }
+.muted { color: var(--muted); font-size: 0.9rem; }
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 分野ボタン・選択肢ボタン */
+.button-list { display: grid; gap: 10px; }
+.button-list button {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  text-align: left;
+  font-size: 1.05rem;
+}
+.button-list button:not(:disabled):hover { border-color: var(--accent); }
+.button-list button:disabled { cursor: default; opacity: 1; color: var(--text); }
+.button-list button.is-correct { border: 2px solid var(--ok); background: var(--ok-bg); }
+.button-list button.is-wrong { border: 2px solid var(--ng); background: var(--ng-bg); }
+
+.primary, .secondary {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.primary { border: none; background: var(--accent); color: var(--accent-text); }
+.secondary { border: 1px solid var(--line); background: var(--card); }
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 8px 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-decoration: underline;
+}
+
+/* 出題画面 */
+.q-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.timer { display: flex; align-items: center; gap: 10px; margin: 4px 0 16px; }
+.timer-bar { flex: 1; height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+#timer-fill { height: 100%; background: var(--accent); transition: width 0.25s linear; }
+#timer-text { min-width: 3.5em; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.timer.is-low #timer-fill { background: var(--ng); }
+.timer.is-low #timer-text { color: var(--ng); }
+
+.q-text {
+  margin: 0 0 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  font-size: 1.1rem;
+}
+
+.feedback {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  scroll-margin-top: 16px;
+}
+.verdict { margin: 0; font-size: 1.25rem; font-weight: 700; }
+.verdict.ok { color: var(--ok); }
+.verdict.ng { color: var(--ng); }
+.fb-answer { font-weight: 600; }
+.mistake { padding: 8px 12px; border-radius: 8px; background: var(--ng-bg); font-size: 0.95rem; }
+.steps { margin: 8px 0 0; padding-left: 1.4em; }
+.steps li { margin: 4px 0; }
+
+/* 結果・成績 */
+.score { margin: 8px 0 0; font-size: 3rem; font-weight: 700; line-height: 1.2; }
+
+table {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--card);
+  overflow: hidden;
+  font-size: 0.95rem;
+}
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: none; }
+th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 8px;
+  border-radius: 99px;
+  background: var(--ng-bg);
+  color: var(--ng);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
