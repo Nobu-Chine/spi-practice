@@ -44,8 +44,9 @@ export function buildChoices(problem, rand) {
   const step = fillerStep(answer);
   const side = rand.pick([1, -1]);
   for (const offset of [side, side * 2, -side, -side * 2]) add(answer + step * offset, null);
-  // 小さすぎる答えなどで上の4つが使えなかったときの予備（check.js で離れすぎを検出できる）
-  for (let k = 3; wrongs.length < WRONG_COUNT; k++) add(answer + step * k, null);
+  // 小さすぎる答えなどで上の4つが使えなかったときの予備（check.js で離れすぎを検出できる）。
+  // 答えが整数でないと永遠に見つからないので、回数に上限をつけて止める（check.js が「4つでない」と検出する）
+  for (let k = 3; wrongs.length < WRONG_COUNT && k < 100; k++) add(answer + step * k, null);
 
   const options = rand.shuffle([{ value: answer, mistake: null, correct: true }, ...wrongs]);
   return {

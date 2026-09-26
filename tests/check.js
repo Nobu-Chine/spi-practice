@@ -9,6 +9,12 @@ const RUNS = 1000;
 const SAMPLE_COUNT = 5;
 const BROKEN_TEXT = /NaN|undefined|Infinity|\{|\}/;
 
+// 解説の1行を文字にする（表は「見出し：値」を並べる。答えのマスには ★）
+function lineText(line) {
+  if (typeof line === 'string') return line;
+  return line.headers.map((h, i) => `${h}：${line.cells[i]}${i === line.highlight ? '★' : ''}`).join(' ｜ ');
+}
+
 function checkProblem(template, q, settings) {
   const errors = [];
   if (!Number.isInteger(q.answer) || q.answer <= 0) errors.push(`答えが正の整数でない: ${q.answer}`);
@@ -29,8 +35,15 @@ function checkProblem(template, q, settings) {
     }
   });
 
-  for (const line of [q.text, ...q.explanation]) {
+  for (const line of [q.text, ...q.explanation.map(lineText)]) {
     if (BROKEN_TEXT.test(line)) errors.push(`文章が壊れている: ${line}`);
+  }
+  // 解説の表：列の数がそろっているか、色付きのマスが答えになっているか
+  for (const t of q.explanation.filter((line) => typeof line !== 'string')) {
+    if (t.headers.length !== t.cells.length) errors.push('解説の表の列の数が合わない');
+    if (t.highlight !== undefined && parseInt(t.cells[t.highlight], 10) !== q.answer) {
+      errors.push(`解説の表の色付きのマスが答えと違う: ${t.cells[t.highlight]}`);
+    }
   }
   if (q.explanation.length === 0) errors.push('解説が空');
   // テンプレート独自のルール（例：損益算の赤字禁止）
@@ -95,7 +108,7 @@ for (let i = 0; i < SAMPLE_COUNT; i++) {
     console.log(`  ${'ABCD'[idx]}. ${q.prefix ?? ''}${c.value}${q.unit}  ${mark}`);
   });
   console.log('  解説:');
-  for (const line of q.explanation) console.log(`   ・${line}`);
+  for (const line of q.explanation) console.log(`   ・${lineText(line)}`);
 }
 
 process.exitCode = totalFailures === 0 ? 0 : 1;

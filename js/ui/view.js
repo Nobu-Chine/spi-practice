@@ -16,6 +16,33 @@ function el(tag, props = {}, text) {
   return node;
 }
 
+// 解説の行を並べる。番号は文字の行だけに振り、表には振らない（1 → 表 → 2 → 3）
+function explanationItems(lines) {
+  let number = 0;
+  return lines.map((line) => {
+    const item = explanationItem(line);
+    if (typeof line === 'string') item.value = ++number;
+    return item;
+  });
+}
+
+// 解説の1行。文字ならそのまま、{ type: 'table' } なら表にする（highlight のマスは答えとして色をつける）
+function explanationItem(line) {
+  if (typeof line === 'string') return el('li', {}, line);
+  const table = el('table', { className: 'mini-table' });
+  const head = table.createTHead().insertRow();
+  const body = table.createTBody().insertRow();
+  line.headers.forEach((header, i) => {
+    head.append(el('th', {}, header));
+    const cell = body.insertCell();
+    cell.textContent = line.cells[i];
+    if (i === line.highlight) cell.className = 'is-answer';
+  });
+  const item = el('li', { className: 'has-table' });
+  item.append(table);
+  return item;
+}
+
 export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, onHome, onClearHistory }) {
   const screens = { home: $('screen-home'), question: $('screen-question'), result: $('screen-result') };
   let lastMode = null;
@@ -112,7 +139,7 @@ export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, 
     $('fb-answer').textContent = `正解：${formatValue(fb.answer, fb.unit, fb.prefix)}`;
     $('fb-mistake').hidden = !fb.mistake;
     $('fb-mistake').textContent = fb.mistake ? `よくあるミス：${fb.mistake}` : '';
-    $('fb-steps').replaceChildren(...fb.explanation.map((line) => el('li', {}, line)));
+    $('fb-steps').replaceChildren(...explanationItems(fb.explanation));
     $('next-button').textContent = fb.isLast ? '結果を見る' : '次の問題へ';
 
     $('feedback').hidden = false;

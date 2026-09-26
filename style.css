@@ -134,6 +134,21 @@ button {
 .mistake { padding: 8px 12px; border-radius: 8px; background: var(--ng-bg); font-size: 0.95rem; }
 .steps { margin: 8px 0 0; padding-left: 1.4em; }
 .steps li { margin: 4px 0; }
+/* 解説の中の表は番号をつけず、カードの幅いっぱいに使う */
+.steps li.has-table { list-style: none; margin: 10px 0 10px -1.4em; }
+
+/* 解説の中の小さな表（集合の人数など）。列の幅を均等にし、スマホ幅でもはみ出さないよう見出しは折り返す */
+.mini-table { table-layout: fixed; font-size: 0.85rem; }
+.mini-table th,
+.mini-table td {
+  padding: 6px 2px;
+  text-align: center;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.mini-table th { font-size: 0.75rem; word-break: keep-all; }
+.mini-table td { font-variant-numeric: tabular-nums; }
+.mini-table td.is-answer { background: var(--ok-bg); color: var(--ok); font-weight: 700; }
 
 /* 結果・成績 */
 .score { margin: 8px 0 0; font-size: 3rem; font-weight: 700; line-height: 1.2; }
