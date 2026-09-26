@@ -1,9 +1,11 @@
 // 分野の登録簿。
 // 分野を増やすときは、このフォルダに1ファイル作って、下の categories に1行足すだけ。
 import ratio from './ratio.js';
+import profit from './profit.js';
 
 export const categories = [
   ratio,
+  profit,
 ];
 
 // 指定した分野のテンプレートを1つ選んで、問題を1問作る
