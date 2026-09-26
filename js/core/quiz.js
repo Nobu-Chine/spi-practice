@@ -53,6 +53,7 @@ export function createQuiz({ categoryIds, generate, settings, rand, saveResult, 
       text: q.text,
       choices: q.choices.map((c) => c.value),
       unit: q.unit,
+      prefix: q.prefix ?? '',
     };
   }
 
@@ -90,6 +91,7 @@ export function createQuiz({ categoryIds, generate, settings, rand, saveResult, 
       answerIndex: q.answerIndex,
       answer: q.answer,
       unit: q.unit,
+      prefix: q.prefix ?? '',
       mistake: correct || timedOut ? null : q.choices[choiceIndex].mistake,
       explanation: q.explanation,
       isLast: index === questions.length - 1,

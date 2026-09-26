@@ -2,7 +2,8 @@
 // 計算・採点はしない。進行役から受け取ったデータを表示し、押されたボタンを知らせるだけ。
 const $ = (id) => document.getElementById(id);
 
-const formatValue = (value, unit) => `${value.toLocaleString('ja-JP')}${unit}`;
+// prefix は「時速48km」の「時速」のように数字の前につく言葉
+const formatValue = (value, unit, prefix = '') => `${prefix}${value.toLocaleString('ja-JP')}${unit}`;
 const formatPercent = (correct, total) => (total ? `${Math.round((correct / total) * 100)}%` : '—');
 function formatTime(ms) {
   const s = Math.round(ms / 1000);
@@ -83,7 +84,7 @@ export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, 
     $('q-text').textContent = q.text;
     $('choice-list').replaceChildren(
       ...q.choices.map((value, i) => {
-        const button = el('button', { type: 'button' }, formatValue(value, q.unit));
+        const button = el('button', { type: 'button' }, formatValue(value, q.unit, q.prefix));
         button.dataset.index = i;
         return button;
       }),
@@ -108,7 +109,7 @@ export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, 
     const verdict = $('fb-verdict');
     verdict.textContent = fb.correct ? '○ 正解' : fb.timedOut ? '× 時間切れ' : '× 不正解';
     verdict.className = `verdict ${fb.correct ? 'ok' : 'ng'}`;
-    $('fb-answer').textContent = `正解：${formatValue(fb.answer, fb.unit)}`;
+    $('fb-answer').textContent = `正解：${formatValue(fb.answer, fb.unit, fb.prefix)}`;
     $('fb-mistake').hidden = !fb.mistake;
     $('fb-mistake').textContent = fb.mistake ? `よくあるミス：${fb.mistake}` : '';
     $('fb-steps').replaceChildren(...fb.explanation.map((line) => el('li', {}, line)));

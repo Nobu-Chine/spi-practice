@@ -92,7 +92,7 @@ for (let i = 0; i < SAMPLE_COUNT; i++) {
   console.log(q.text);
   q.choices.forEach((c, idx) => {
     const mark = idx === q.answerIndex ? '← 正解' : c.mistake ? `← ミス: ${c.mistake}` : '← 近い数（補充）';
-    console.log(`  ${'ABCD'[idx]}. ${c.value}${q.unit}  ${mark}`);
+    console.log(`  ${'ABCD'[idx]}. ${q.prefix ?? ''}${c.value}${q.unit}  ${mark}`);
   });
   console.log('  解説:');
   for (const line of q.explanation) console.log(`   ・${line}`);
