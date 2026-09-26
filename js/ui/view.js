@@ -129,7 +129,9 @@ export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, 
     const table = el('table');
     table.append(el('tr'));
     table.rows[0].append(el('th', {}, '分野'), el('th', { className: 'num' }, '正答'), el('th', { className: 'num' }, '平均時間'));
-    for (const [id, c] of Object.entries(result.byCategory)) {
+    // 分野の並びはトップ画面と同じ登録順にそろえる
+    for (const id of Object.keys(categoryLabels).filter((id) => result.byCategory[id])) {
+      const c = result.byCategory[id];
       const row = table.insertRow();
       row.insertCell().textContent = categoryLabels[id];
       Object.assign(row.insertCell(), { className: 'num', textContent: `${c.correct}/${c.total}（${formatPercent(c.correct, c.total)}）` });

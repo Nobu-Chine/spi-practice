@@ -1,7 +1,8 @@
 // 問題生成のチェック。全テンプレートを「電卓なし」「電卓あり」でそれぞれ大量に作り、おかしな問題がないか確かめる。
-// 使い方： node tests/check.js
+// 使い方： node tests/check.js          … 全分野をチェックし、見本は全分野から
+//         node tests/check.js profit   … 全分野をチェックし、見本は損益算だけ
 import { categories } from '../js/generators/index.js';
-import { buildChoices } from '../js/core/choices.js';
+import { buildChoices, fillerLimit } from '../js/core/choices.js';
 import { createRandom } from '../js/core/random.js';
 
 const RUNS = 1000;
@@ -20,10 +21,20 @@ function checkProblem(template, q) {
   if (values.some((v) => !Number.isInteger(v) || v <= 0)) errors.push(`選択肢に正の整数でないもの: ${values}`);
   if (values[q.answerIndex] !== q.answer) errors.push('正解の位置がずれている');
 
+  // 補充した選択肢（ミス由来でないもの）が正解から離れすぎていないか
+  q.choices.forEach((c, idx) => {
+    if (idx === q.answerIndex || c.mistake !== null) return;
+    if (Math.abs(c.value - q.answer) > fillerLimit(q.answer)) {
+      errors.push(`補充の選択肢が正解から離れすぎ: 正解=${q.answer} 補充=${c.value}（許容 ±${fillerLimit(q.answer)}）`);
+    }
+  });
+
   for (const line of [q.text, ...q.explanation]) {
     if (BROKEN_TEXT.test(line)) errors.push(`文章が壊れている: ${line}`);
   }
   if (q.explanation.length === 0) errors.push('解説が空');
+  // テンプレート独自のルール（例：損益算の赤字禁止）
+  errors.push(...(template.validate?.(q.params) ?? []));
   return errors;
 }
 
@@ -68,9 +79,12 @@ console.table(rows);
 console.log(totalFailures === 0 ? '→ すべてOK' : `→ NG が ${totalFailures} 件あります`);
 
 // 見本の問題（電卓なし）。テンプレートを順番に使う
+const sampleCategoryId = process.argv[2];
+const sampleCategories = sampleCategoryId ? categories.filter((c) => c.id === sampleCategoryId) : categories;
+if (sampleCategories.length === 0) throw new Error(`分野が見つからない: ${sampleCategoryId}`);
 console.log(`\n=== 見本の問題 ${SAMPLE_COUNT}問（電卓なし） ===`);
 const sampleRand = createRandom(20260926);
-const allTemplates = categories.flatMap((c) => c.templates.map((t) => ({ category: c, template: t })));
+const allTemplates = sampleCategories.flatMap((c) => c.templates.map((t) => ({ category: c, template: t })));
 for (let i = 0; i < SAMPLE_COUNT; i++) {
   const { category, template } = allTemplates[i % allTemplates.length];
   const q = buildChoices(template.generate(sampleRand, { calculator: false }), sampleRand);
