@@ -1,4 +1,6 @@
-// 問題生成のチェック。全テンプレートを「電卓なし」「電卓あり」でそれぞれ大量に作り、おかしな問題がないか確かめる。
+// 問題の自動チェック係。全分野の問題を大量に作り、答え・選択肢・解説・コピー用の文章がおかしくないか確かめる。
+// アプリ本体と同じ generators/・choices.js・ask-text.js を使うので、本番と同じ問題を確かめられる。
+//
 // 使い方： node tests/check.js          … 全分野をチェックし、見本は全分野から
 //         node tests/check.js profit   … 全分野をチェックし、見本は損益算だけ
 import { categories } from '../js/generators/index.js';

@@ -1,4 +1,5 @@
-// 起動役。部品同士をつなぐだけで、中身の処理はしない。
+// つなぎ役（司令塔）の係。アプリを開くと最初に動き、画面（view.js）・進行役（quiz.js）・保存係（history.js）などをつなぐ。
+// 自分では計算も表示もせず、「ボタンが押されたら quiz.js を呼び、返ってきた結果を view.js に渡す」だけ。
 import { settings } from './config.js';
 import { categories, generateProblem } from './generators/index.js';
 import { createRandom } from './core/random.js';

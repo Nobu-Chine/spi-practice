@@ -1,4 +1,6 @@
-// 割合の問題を作る。
+// 「割合」の問題を作る係。index.js（登録簿）から呼ばれ、問題文・正解・よくあるミス・解説をセットで返す。
+// 数字を選ぶときは math.js の計算道具を使う。
+//
 // どのテンプレートも「先に答えを決めて、そこから問題の数字を作る（逆算）」ので、答えは必ず割り切れる整数になる。
 // generate() が問題を作り、solve() は問題文に出した数字だけを使って解き直す（検算用）。
 import { lcm, percentToFraction, pickMultiple, pickPreferring } from '../core/math.js';

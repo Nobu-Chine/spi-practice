@@ -1,4 +1,5 @@
-// 成績の集計だけを担当する。保存も表示もしない。
+// 成績を集計する係。1回分の正答率（quiz.js から頼まれる）と、これまでの苦手分野（main.js から頼まれる）を計算する。
+// 保存は history.js、表示は view.js の係なので、ここでは計算だけをする。
 
 // 1回分の解答記録をまとめる
 export function summarizeSession(records) {

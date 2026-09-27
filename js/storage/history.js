@@ -1,4 +1,6 @@
-// 成績の保存と読み込みだけを担当する（ブラウザの localStorage を使う）。
+// 成績の保存係。練習の結果をブラウザ（localStorage）に保存し、読み込み・消去する。
+// quiz.js が1回終わるごとに保存し、main.js がトップ画面の成績表のために読み込む。
+//
 // プライベートブラウズなどで保存できない環境でも、アプリ自体は止まらないようにしている。
 const KEY = 'spi-practice-history-v1';
 const MAX_SESSIONS = 200;

@@ -1,4 +1,4 @@
-// 分野の登録簿。
+// 問題づくりの受付（分野の登録簿）。quiz.js から「この分野の問題を1問」と頼まれると、担当の分野ファイルに作らせる。
 // 分野を増やすときは、このフォルダに1ファイル作って、下の categories に1行足すだけ。
 import ratio from './ratio.js';
 import profit from './profit.js';

@@ -1,5 +1,5 @@
-// 「AIに質問用にコピー」で使う文章を組み立てる。
-// 受け取るのは quiz.review() のデータだけで、画面やクリップボードのことは知らない。
+// 「AIに質問用にコピー」の文章を作る係。quiz.js から受け取った問題と答えのデータを、読みやすい文章に並べる。
+// 作った文章は main.js が clipboard.js に渡してコピーする。画面のことは知らない。
 import { formatValue, explanationLineText } from './format.js';
 
 const LETTERS = 'ABCD';

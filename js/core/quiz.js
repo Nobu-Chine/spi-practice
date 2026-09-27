@@ -1,5 +1,5 @@
-// クイズの進行役：問題を用意し、解答を採点し、タイマーを動かし、最後に結果をまとめる。
-// 画面のことは知らない。結果はデータで返すだけ。
+// クイズの進行役。10問を用意し、答えを採点し、タイマーを動かし、最後に結果をまとめる。
+// 問題づくりは generators/、選択肢は choices.js、時間は timer.js、集計は stats.js に任せる。画面のことは知らない。
 import { buildChoices } from './choices.js';
 import { createTimer } from './timer.js';
 import { summarizeSession } from './stats.js';

@@ -1,5 +1,5 @@
-// 画面の表示とボタン操作だけを担当する。
-// 計算・採点はしない。進行役から受け取ったデータを表示し、押されたボタンを知らせるだけ。
+// 画面の表示とボタン操作の係。計算や採点は quiz.js に任せ、受け取った結果を表示するだけ。
+// ボタンが押されたことは main.js に知らせる。数字の書き方は format.js を使う。
 import { formatValue } from '../core/format.js';
 
 const $ = (id) => document.getElementById(id);
