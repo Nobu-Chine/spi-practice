@@ -4,12 +4,14 @@ import ratio from './ratio.js';
 import profit from './profit.js';
 import speed from './speed.js';
 import sets from './sets.js';
+import counting from './counting.js';
 
 export const categories = [
   ratio,
   profit,
   speed,
   sets,
+  counting,
 ];
 
 // 指定した分野のテンプレートを1つ選んで、問題を1問作る。
