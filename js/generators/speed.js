@@ -1,7 +1,8 @@
 // 「速度算」の問題を作る係。index.js（登録簿）から呼ばれ、問題文・正解・よくあるミス・解説をセットで返す。
 // 数字を選ぶときは math.js の計算道具を使う。
 //
-// どちらも「先に速さと時間を決めて、距離を計算する」逆算方式なので、答えは必ず割り切れる整数になる。
+// どのテンプレートも「先に速さと時間を決めて、距離を計算する」逆算方式なので、答えは必ず割り切れる整数になる。
+// 旅人算（出会い・追い越し）は本番で出やすいので、ほかの2倍出るようにしている（weight: 2）。
 import { gcd, lcm, pickPreferring } from '../core/math.js';
 
 // top ÷ bottom の「時間」の書き方。
@@ -118,8 +119,109 @@ const averageRoundTrip = {
   },
 };
 
+// C. 旅人算：2人が向かい合って進む「出会い」と、後から追いかける「追い越し」を半分ずつ出す
+const PAIRS = [
+  { first: '兄', second: '弟' },
+  { first: 'Aさん', second: 'Bさん' },
+];
+// 電卓なしで使う、歩く速さ（分速m）と時間（分）
+const WALK_SPEEDS = [50, 60, 70, 75, 80, 90, 100];
+const MEET_MINUTES = [4, 5, 6, 8, 10, 12, 15, 20];
+const CHASE_SPEEDS = [40, 50, 60, 70, 75, 80, 90, 100];
+const CHASE_GAPS = [10, 15, 20, 25, 30, 40, 50, 60]; // 追いかける人のほうが1分あたり何m速いか
+const HEAD_MINUTES = [2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 18, 20]; // 先に出発した人が何分先に出たか
+
+// 出会い：距離 ÷ (速さの和)
+function meetProblem(rand, calculator, p) {
+  const pickMeet = () => {
+    for (;;) {
+      const v1 = calculator ? rand.int(40, 120) : rand.pick(WALK_SPEEDS);
+      const v2 = calculator ? rand.int(40, 120) : rand.pick(WALK_SPEEDS);
+      const t = calculator ? rand.int(3, 30) : rand.pick(MEET_MINUTES);
+      if (v1 !== v2) return { v1, v2, t };
+    }
+  };
+  // 代表的なミス（速さの差で割る）も整数になる組み合わせを優先する
+  const { v1, v2, t } = pickPreferring(pickMeet, ({ v1, v2, t }) => ((v1 + v2) * t) % Math.abs(v1 - v2) === 0);
+  const sum = v1 + v2;
+  const d = sum * t;
+
+  return {
+    params: { kind: 'meet', d, v1, v2 },
+    text: `A地点とB地点は${d}m離れている。${p.first}はA地点から分速${v1}m、${p.second}はB地点から分速${v2}mで、同時に向かい合って歩き始めた。2人が出会うのは何分後か。`,
+    answer: t,
+    unit: '分',
+    wrongs: [
+      { value: d / Math.abs(v1 - v2), mistake: '向かい合って進むのに、速さの差で割ってしまった（差を使うのは追い越しのとき）' },
+      { value: 2 * t, mistake: '2人の速さを平均して、その速さで割ってしまった' },
+      { value: d / v1, mistake: `${p.first}の速さだけで割ってしまった（2人とも近づいている）` },
+    ],
+    explanation: [
+      `2人は1分間に ${v1} ＋ ${v2} ＝ ${sum}m ずつ近づく`,
+      `出会うまでの時間 ＝ ${d} ÷ ${sum} ＝ ${t}分`,
+      'ポイント：向かい合って進むときは、2人の速さを足す（出会い算）',
+    ],
+  };
+}
+
+// 追い越し：先に進んだ距離 ÷ (速さの差)
+function chaseProblem(rand, calculator, p) {
+  const pickChase = () => {
+    for (;;) {
+      const v2 = calculator ? rand.int(40, 100) : rand.pick(CHASE_SPEEDS);
+      const gap = calculator ? rand.int(5, 60) : rand.pick(CHASE_GAPS);
+      const h = calculator ? rand.int(2, 20) : rand.pick(HEAD_MINUTES);
+      const t = (v2 * h) / gap;
+      if (Number.isInteger(t) && t >= 2 && t <= (calculator ? 60 : 30)) return { v1: v2 + gap, v2, h, t };
+    }
+  };
+  // 代表的なミス（速さの和で割る）も整数になる組み合わせを優先する。
+  // ほかのミスまで条件に入れると、数字の組み合わせが数通りに偏るので入れない
+  const { v1, v2, h, t } = pickPreferring(pickChase, ({ v1, v2, h }) => (v2 * h) % (v1 + v2) === 0);
+  const ahead = v2 * h;
+  const diff = v1 - v2;
+
+  return {
+    params: { kind: 'chase', v1, v2, h },
+    text: `${p.second}が家を出て、分速${v2}mで駅に向かった。その${h}分後に${p.first}が家を出て、同じ道を分速${v1}mで追いかけた。${p.first}が${p.second}に追いつくのは、${p.first}が家を出てから何分後か。`,
+    answer: t,
+    unit: '分',
+    wrongs: [
+      { value: ahead / (v1 + v2), mistake: '同じ向きに追いかけるのに、速さの和で割ってしまった（和を使うのは出会いのとき）' },
+      { value: t + h, mistake: `${p.first}ではなく、${p.second}が家を出てからの時間を答えてしまった` },
+      { value: ahead / v1, mistake: `差を縮める速さ（${diff}m）ではなく、${p.first}の速さで割ってしまった` },
+    ],
+    explanation: [
+      `${p.first}が家を出るまでに、${p.second}は ${v2} × ${h} ＝ ${ahead}m 先に進んでいる`,
+      `${p.first}は1分間に ${v1} − ${v2} ＝ ${diff}m ずつ差を縮める`,
+      `追いつくまでの時間 ＝ ${ahead} ÷ ${diff} ＝ ${t}分`,
+      'ポイント：同じ向きに追いかけるときは速さを引く（追い越し算）。先に進んだ距離を先に出す',
+    ],
+  };
+}
+
+const travelers = {
+  id: 'speed-travelers',
+  weight: 2,
+  generate(rand, { calculator }) {
+    const p = rand.pick(PAIRS);
+    return rand.next() < 0.5 ? meetProblem(rand, calculator, p) : chaseProblem(rand, calculator, p);
+  },
+  // 検算：出会いは 距離 ÷ 速さの和、追い越しは 先に進んだ距離 ÷ 速さの差
+  solve(params) {
+    if (params.kind === 'meet') return params.d / (params.v1 + params.v2);
+    return (params.v2 * params.h) / (params.v1 - params.v2);
+  },
+  // check.js が使う独自チェック：追いかける人のほうが速いか、出会いの2人の速さが違うか
+  validate(params) {
+    if (params.kind === 'chase' && params.v1 <= params.v2) return ['追いかける人のほうが遅い（追いつけない）'];
+    if (params.kind === 'meet' && params.v1 === params.v2) return ['出会いの2人の速さが同じ'];
+    return [];
+  },
+};
+
 export default {
   id: 'speed',
   label: '速度算',
-  templates: [minutesFromDistance, averageRoundTrip],
+  templates: [minutesFromDistance, averageRoundTrip, travelers],
 };

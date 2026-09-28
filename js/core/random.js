@@ -23,6 +23,16 @@ export function createRandom(seed = Date.now()) {
     pick(list) {
       return list[Math.floor(next() * list.length)];
     },
+    // 重みつきで1つ選ぶ。weightOf が2を返すものは、1のものの2倍出やすい
+    weightedPick(list, weightOf) {
+      const total = list.reduce((sum, item) => sum + weightOf(item), 0);
+      let r = next() * total;
+      for (const item of list) {
+        r -= weightOf(item);
+        if (r < 0) return item;
+      }
+      return list[list.length - 1];
+    },
     shuffle(list) {
       const copy = [...list];
       for (let i = copy.length - 1; i > 0; i--) {

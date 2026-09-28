@@ -3,7 +3,8 @@
 //
 // 使い方： node tests/check.js          … 全分野をチェックし、見本は全分野から
 //         node tests/check.js profit   … 全分野をチェックし、見本は損益算だけ
-import { categories } from '../js/generators/index.js';
+//         node tests/check.js speed-travelers … 見本を旅人算のテンプレートだけに絞る
+import { categories, generateProblem } from '../js/generators/index.js';
 import { buildChoices, fillerLimit } from '../js/core/choices.js';
 import { createRandom } from '../js/core/random.js';
 import { formatValue, explanationLineText } from '../js/core/format.js';
@@ -128,13 +129,28 @@ console.log(`\n=== チェック結果（各 ${RUNS} 問） ===`);
 console.table(rows);
 console.log(totalFailures === 0 ? '→ すべてOK' : `→ NG が ${totalFailures} 件あります`);
 
-// 見本の問題（電卓なし）。テンプレートを順番に使う
-const sampleCategoryId = process.argv[2];
-const sampleCategories = sampleCategoryId ? categories.filter((c) => c.id === sampleCategoryId) : categories;
-if (sampleCategories.length === 0) throw new Error(`分野が見つからない: ${sampleCategoryId}`);
+// テンプレートの出やすさ（weight）どおりに出ているか：各分野で1万問作って割合を数える
+console.log('\n=== テンプレートの出る割合（各分野1万問） ===');
+const weightRand = createRandom(1);
+for (const category of categories.filter((c) => c.templates.some((t) => t.weight))) {
+  const counts = Object.fromEntries(category.templates.map((t) => [t.id, 0]));
+  for (let i = 0; i < 10000; i++) counts[generateProblem(category.id, weightRand, { calculator: false }).templateId]++;
+  const totalWeight = category.templates.reduce((sum, t) => sum + (t.weight ?? 1), 0);
+  for (const t of category.templates) {
+    const expected = Math.round(((t.weight ?? 1) / totalWeight) * 100);
+    console.log(`  ${category.label} ${t.id}: ${Math.round(counts[t.id] / 100)}%（予定 ${expected}%）`);
+  }
+}
+
+// 見本の問題（電卓なし）。テンプレートを順番に使う。
+// 引数は分野のid（例：speed）でも、テンプレートのid（例：speed-travelers）でもよい
+const sampleFilter = process.argv[2];
+const allTemplates = categories
+  .flatMap((c) => c.templates.map((t) => ({ category: c, template: t })))
+  .filter(({ category, template }) => !sampleFilter || category.id === sampleFilter || template.id === sampleFilter);
+if (allTemplates.length === 0) throw new Error(`分野・テンプレートが見つからない: ${sampleFilter}`);
 console.log(`\n=== 見本の問題 ${SAMPLE_COUNT}問（電卓なし） ===`);
 const sampleRand = createRandom(20260926);
-const allTemplates = sampleCategories.flatMap((c) => c.templates.map((t) => ({ category: c, template: t })));
 for (let i = 0; i < SAMPLE_COUNT; i++) {
   const { category, template } = allTemplates[i % allTemplates.length];
   const q = buildChoices(template.generate(sampleRand, { calculator: false }), sampleRand);
