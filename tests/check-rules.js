@@ -1,6 +1,6 @@
 // 検査の決まりの係。1問の問題を受け取って、答え・選択肢・解説・コピー用の文章におかしな点がないかを調べ、見つけた問題点の一覧を返す。
 // tests/check.js が大量の問題に使う。値の判定は values.js、書き方は format.js、コピー文は ask-text.js と、アプリ本体と同じものを使う。
-import { isFraction, valueKey, sameValue, isUsableValue, isNearAnswer } from '../js/core/values.js';
+import { isFraction, isLabel, valueKind, valueKey, sameValue, isUsableValue, isNearAnswer } from '../js/core/values.js';
 import { gcd } from '../js/core/math.js';
 import { formatValue, explanationLineText } from '../js/core/format.js';
 import { buildAskText } from '../js/core/ask-text.js';
@@ -50,7 +50,7 @@ export function checkAskText(category, q) {
 export function checkProblem(template, q, settings) {
   const errors = [];
   const answerText = valueKey(q.answer);
-  // 答えは正の整数か、0より大きく1より小さい約分済みの分数（確率）
+  // 答えは正の整数か、0より大きく1より小さい約分済みの分数（確率）か、空でない文字（推論）
   if (!isUsableValue(q.answer)) errors.push(`答えが使えない値: ${answerText}`);
   if (isFraction(q.answer) && gcd(q.answer.num, q.answer.den) !== 1) errors.push(`答えの分数が約分されていない: ${answerText}`);
   const solved = template.solve(q.params);
@@ -61,13 +61,16 @@ export function checkProblem(template, q, settings) {
   if (values.length !== 4) errors.push(`選択肢が4つでない: ${values.length}個`);
   if (new Set(keys).size !== keys.length) errors.push(`選択肢が重複: ${keys}`);
   if (values.some((v) => !isUsableValue(v))) errors.push(`選択肢に使えない値: ${keys}`);
-  if (values.some((v) => isFraction(v) !== isFraction(q.answer))) errors.push(`選択肢に整数と分数がまざっている: ${keys}`);
+  if (values.some((v) => valueKind(v) !== valueKind(q.answer))) errors.push(`選択肢に種類のちがう値（整数・分数・文字）がまざっている: ${keys}`);
   if (!sameValue(values[q.answerIndex], q.answer)) errors.push('正解の位置がずれている');
 
-  // 補充した選択肢（ミス由来でないもの）が正解から離れすぎていないか
+  // 補充した選択肢（ミス由来でないもの）が正解から離れすぎていないか。
+  // 文字の答えには「近い値」がないので、誤答は全部ミスの説明つきでなければいけない
   q.choices.forEach((c, idx) => {
     if (idx === q.answerIndex || c.mistake !== null) return;
-    if (!isNearAnswer(c.value, q.answer)) {
+    if (isLabel(q.answer)) {
+      errors.push(`文字の答えなのに、ミスの説明がない選択肢がある: ${valueKey(c.value)}`);
+    } else if (!isNearAnswer(c.value, q.answer)) {
       errors.push(`補充の選択肢が正解から離れすぎ: 正解=${answerText} 補充=${valueKey(c.value)}`);
     }
   });

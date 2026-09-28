@@ -117,6 +117,7 @@ button {
   border-radius: 12px;
   background: var(--card);
   font-size: 1.1rem;
+  white-space: pre-line; /* 問題文の改行（推論の条件やア・イ・ウ）をそのまま表示する */
 }
 
 .feedback {
