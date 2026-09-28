@@ -1,8 +1,9 @@
 // 「損益算」の問題を作る係。index.js（登録簿）から呼ばれ、問題文・正解・よくあるミス・解説をセットで返す。
 // 数字を選ぶときは math.js の計算道具を使う。
 //
-// どちらのテンプレートも「先に原価を決めて、定価・売値・利益を計算する」逆算方式。
-// 赤字（利益が0以下）になる%の組み合わせは使わない：(100+a)(100−b) > 10000 のときだけ採用する。
+// どのテンプレートも「先に原価を決めて、定価・売値・利益を計算する」逆算方式。
+// 赤字（利益が0以下）になる組み合わせは使わない。A・B は (100+a)(100−b) > 10000 のときだけ採用し、
+// C（売れ残り）は全体の利益が0より大きくなるまで選び直す。
 import { gcd, lcm, pickMultiple, pickPreferring } from '../core/math.js';
 
 // 電卓なしで使う、暗算しやすい%
@@ -131,8 +132,97 @@ const costFromProfit = {
   },
 };
 
+// C. 売れ残り：まとめて仕入れ、一部は定価で売れ、残りは値引きして売る（または捨てる）。全体の利益を求める
+// 電卓なしで使う、暗算しやすい数字
+const LEFTOVER_COSTS = [100, 200, 300, 400, 500, 600]; // 1個の原価（円）
+const LEFTOVER_COUNTS = [50, 100, 120, 150, 200]; // 仕入れた個数
+const SOLD_PERCENTS = [60, 70, 75, 80, 90]; // 定価で売れた割合
+const LEFTOVER_DISCOUNTS = [10, 20, 30, 40, 50]; // 残りを定価の何%引きで売るか（50は「半額」と書く）
+
+// 1個の原価・%から、定価と値引き後の売値（捨てるときは0円）を出す
+function leftoverPrices({ cost, a, b, discard }) {
+  const list = (cost * (100 + a)) / 100;
+  return { list, sale: discard ? 0 : (list * (100 - b)) / 100 };
+}
+
+function pickLeftover(rand, calculator) {
+  for (;;) {
+    const cost = calculator ? rand.int(10, 200) * 10 : rand.pick(LEFTOVER_COSTS);
+    const count = calculator ? rand.int(50, 500) : rand.pick(LEFTOVER_COUNTS);
+    const soldPercent = calculator ? rand.int(50, 95) : rand.pick(SOLD_PERCENTS);
+    const sold = (count * soldPercent) / 100;
+    const a = calculator ? rand.int(10, 60) : rand.pick(NICE_MARKUPS);
+    const b = calculator ? rand.int(5, 60) : rand.pick(LEFTOVER_DISCOUNTS);
+    const discard = rand.next() < 0.5;
+    const { list, sale } = leftoverPrices({ cost, a, b, discard });
+    const profit = sold * list + (count - sold) * sale - cost * count;
+    // 電卓なしは、定価・売値を10円単位、売れた個数・残りの個数を10個単位にして、掛け算を暗算できる大きさにする
+    const easy = calculator || [list, sale, sold, count - sold].every((v) => v % 10 === 0);
+    // 個数・定価・売値が整数で、全体で黒字になる組み合わせだけ使う
+    if (easy && Number.isInteger(sold) && sold < count && Number.isInteger(list) && Number.isInteger(sale) && profit > 0) {
+      return { cost, count, sold, a, b, discard, list, sale, profit };
+    }
+  }
+}
+
+const leftover = {
+  id: 'profit-leftover',
+  generate(rand, { calculator }) {
+    const { cost, count, sold, a, b, discard, list, sale, profit } = pickLeftover(rand, calculator);
+    const rest = count - sold;
+    const revenue = sold * list + rest * sale;
+    const totalCost = cost * count;
+    const saleText = b === 50 ? '定価の半額' : `定価の${b}%引き`;
+    const restText = discard ? '残りは売れ残ったので捨てた' : `残りは${saleText}で売った`;
+
+    const wrongs = [
+      { value: (list - cost) * count, mistake: '売れ残りがなく、全部が定価で売れたとして計算してしまった' },
+      discard
+        ? { value: (list - cost) * sold, mistake: `捨てた${rest}個の仕入れ値を引き忘れてしまった` }
+        : {
+            value: sold * list + rest * ((cost * (100 - b)) / 100) - totalCost,
+            mistake: `値引き後の売値を、定価ではなく原価から計算してしまった`,
+          },
+      { value: revenue, mistake: '利益ではなく、売上の合計を答えてしまった' },
+      { value: revenue - cost * sold, mistake: `仕入れ値を、売れた${sold}個の分しか引いていない` },
+    ];
+
+    const explanation = [
+      `定価 ＝ ${cost} × ${rateText(100 + a, 100)} ＝ ${list}円`,
+      ...(discard ? [] : [`${saleText} ＝ ${list} × ${rateText(100 - b, 100)} ＝ ${sale}円`]),
+      discard
+        ? `売上 ＝ ${list} × ${sold}個 ＝ ${revenue}円（捨てた${rest}個は売上0円）`
+        : `売上 ＝ ${list} × ${sold}個 ＋ ${sale} × ${rest}個 ＝ ${list * sold} ＋ ${sale * rest} ＝ ${revenue}円`,
+      `仕入れ値の合計 ＝ ${cost} × ${count}個 ＝ ${totalCost}円`,
+      `利益 ＝ ${revenue} − ${totalCost} ＝ ${profit}円`,
+      `ポイント：仕入れ値は、売れ残った${rest}個も含めた${count}個ぶんかかっている`,
+    ];
+
+    return {
+      params: { cost, count, sold, a, b, discard },
+      text: `ある商品を1個${cost}円で${count}個仕入れ、原価の${a}%の利益を見込んで定価をつけた。${sold}個は定価で売れたが、${restText}。全体の利益は何円か。`,
+      answer: profit,
+      unit: '円',
+      wrongs,
+      explanation,
+    };
+  },
+  // 検算：1個あたりの利益（損）を足し合わせる。定価で売れた分 ＋ 残りの分
+  solve(params) {
+    const { list, sale } = leftoverPrices(params);
+    return (list - params.cost) * params.sold + (sale - params.cost) * (params.count - params.sold);
+  },
+  // check.js が使う独自チェック：全体で黒字か、売れ残りがちゃんとあるか
+  validate(params) {
+    const errors = [];
+    if (this.solve(params) <= 0) errors.push('全体の利益が0円以下（赤字）');
+    if (!(params.sold > 0 && params.sold < params.count)) errors.push(`売れた個数がおかしい: ${params.sold}/${params.count}`);
+    return errors;
+  },
+};
+
 export default {
   id: 'profit',
   label: '損益算',
-  templates: [profitFromDeal, costFromProfit],
+  templates: [profitFromDeal, costFromProfit, leftover],
 };
