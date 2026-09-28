@@ -1,7 +1,8 @@
 // 「集合」の問題を作る係。index.js（登録簿）から呼ばれ、問題文・正解・よくあるミス・解説（人数の表つき）をセットで返す。
 // 数字を選ぶときは math.js の計算道具を使う。
 //
-// 先に「Aだけ・両方・Bだけ・どちらでもない」の4つの人数（どれも1人以上）を決めてから、問題に出す数字を計算する逆算方式。
+// 先に「Aだけ・両方・Bだけ・どちらでもない」の4つの人数を決めてから、問題に出す数字を計算する逆算方式。
+// A・B はどれも1人以上。C（少なくとも何人）は、どちらでもない人が0人のときを考えるので、そこだけ0人になる。
 // 解説には4つの人数と合計の表を入れる（解説の1行を { type: 'table', ... } にすると画面側が表として表示する）。
 import { pickPreferring } from '../core/math.js';
 
@@ -138,8 +139,64 @@ const bothFromNeither = {
   },
 };
 
+// C. 両方にあてはまる人は「少なくとも何人」か（最小の人数）
+// 両方の人が一番少なくなるのは、どちらでもない人が0人のとき。そのとき 両方 ＝ A ＋ B − 合計
+function pickAtLeast(rand, calculator) {
+  const total = calculator ? rand.int(100, 1000) : rand.pick(NICE_TOTALS);
+  const unit = calculator ? 1 : total / 20; // 電卓なしは合計の20分の1刻み（100人なら5人刻み）
+  const slots = total / unit;
+  // 本番の問題らしく、A も B も合計の50〜95%にする（片方だけ極端に少ない問題にしない）
+  const low = Math.ceil(slots * 0.5);
+  const high = Math.floor(slots * 0.95);
+  for (;;) {
+    // A も B も合計より少なく、2つを足すと合計を超える（超えた分が「少なくとも」の人数）
+    const a = rand.int(low, high) * unit;
+    const b = rand.int(low, high) * unit;
+    const both = a + b - total;
+    if (a !== b && both >= unit && a - both >= unit && b - both >= unit) return { total, a, b, both };
+  }
+}
+
+const bothAtLeast = {
+  id: 'sets-at-least',
+  generate(rand, { calculator }) {
+    const { total, a, b, both } = pickAtLeast(rand, calculator);
+    const s = rand.pick(SCENES);
+    const r = { onlyA: a - both, both, onlyB: b - both, neither: 0, total };
+
+    return {
+      params: { total, a, b },
+      text: `${s.intro(total)}${s.a.has}は${a}人、${s.b.has}は${b}人だった。${s.both}は少なくとも何人いるか。`,
+      answer: both,
+      unit: '人',
+      wrongs: [
+        { value: Math.min(a, b), mistake: '「少なくとも（一番少ない場合）」ではなく、「多くとも（一番多い場合）」の人数を出してしまった' },
+        { value: Math.abs(a - b), mistake: `${a}人と${b}人の差を答えてしまった` },
+        { value: total - Math.max(a, b), mistake: `合計から多いほうの${Math.max(a, b)}人を引いてしまった` },
+      ],
+      explanation: [
+        `両方の人が一番少なくなるのは、${s.neither}が0人のとき。表にすると`,
+        regionTable(s, r, 1),
+        `両方 ＝ ${a} ＋ ${b} − ${total} ＝ ${a + b} − ${total} ＝ ${both}人`,
+        `ポイント：${a} ＋ ${b} ＝ ${a + b}人は合計の${total}人より${both}人多い。この多い分は、必ず両方に数えられている`,
+      ],
+    };
+  },
+  // 検算：A ＋ B − 合計
+  solve({ total, a, b }) {
+    return a + b - total;
+  },
+  // check.js が使う独自チェック：A・B が合計より少なく、Aだけ・両方・Bだけ がどれも1人以上か
+  validate({ total, a, b }) {
+    const both = a + b - total;
+    const errors = validateRegions({ onlyA: a - both, both, onlyB: b - both });
+    if (a >= total || b >= total) errors.push(`AかBが合計以上: A=${a} B=${b} 合計=${total}`);
+    return errors;
+  },
+};
+
 export default {
   id: 'sets',
   label: '集合',
-  templates: [neitherFromBoth, bothFromNeither],
+  templates: [neitherFromBoth, bothFromNeither, bothAtLeast],
 };

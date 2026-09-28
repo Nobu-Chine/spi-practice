@@ -46,4 +46,5 @@
 - 解説の1行は文字のほか `{ type: 'table', headers, cells, highlight }` にでき、画面では表になる（highlight は答えのマスで、check.js が答えと一致するか検査する）。集合は「Aだけ・両方・Bだけ・どちらでもない・合計」の表 → 式の順で解説する
 - 「AIに質問用にコピー」：文章づくりは `core/ask-text.js`（`quiz.review()` のデータだけを使う）、コピーは `ui/clipboard.js`、view.js はボタンと「コピーしました」の表示だけ。iPhone はボタンを押した流れの中でないとコピーを断るので、main.js の onCopy で押された直後に copyText を呼ぶ。check.js はコピー文も全問検査する
 - 数字の書き方（`formatValue`）と解説の表の文字化（`explanationLineText`）は `core/format.js` にまとめ、画面・コピー文・check.js で共通に使う
+- 集合C（少なくとも何人）は、どちらでもない人が0人の表 → 「A ＋ B − 合計」の式で解説する。A・B はどちらも合計の50〜95%にする（片方だけ極端に少ない不自然な問題を出さない）
 - 解説の表はスマホ幅（320px）でもはみ出さないことを確認済み。見出しの折り返し位置は ​ で指定する
