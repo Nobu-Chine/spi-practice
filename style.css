@@ -153,6 +153,19 @@ button {
 
 /* AIに質問用にコピー */
 .copy-row .secondary { margin-top: 16px; font-weight: 500; }
+
+/* 間違えた問題の復習ボタン（分野ボタンと同じ形で、色で目立たせる） */
+.review-button {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--accent);
+  text-align: left;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
 .copy-message { min-height: 1.5em; margin: 6px 0 0; text-align: center; font-size: 0.85rem; }
 .copy-message.ok { color: var(--ok); }
 .copy-message.ng { color: var(--ng); }

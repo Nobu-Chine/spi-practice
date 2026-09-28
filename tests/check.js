@@ -1,5 +1,5 @@
 // 問題の自動チェック係。全分野の問題を大量に作り、検査の決まり（check-rules.js）に通して、おかしな問題がないか確かめる。
-// 最初に check-selftest.js で検査の決まり自体を確かめる。アプリ本体と同じ generators/・choices.js を使うので、本番と同じ問題を確かめられる。
+// 最初に check-selftest.js で検査の決まり自体を、check-review.js で復習機能を確かめる。アプリ本体と同じ generators/・choices.js を使うので、本番と同じ問題を確かめられる。
 //
 // 使い方： node tests/check.js          … 全分野をチェックし、見本は全分野から
 //         node tests/check.js profit   … 全分野をチェックし、見本は損益算だけ
@@ -10,6 +10,7 @@ import { createRandom } from '../js/core/random.js';
 import { formatValue } from '../js/core/format.js';
 import { checkProblem, checkAskText, lineText } from './check-rules.js';
 import { runSelfTest } from './check-selftest.js';
+import { runReviewTest } from './check-review.js';
 
 const RUNS = 1000;
 const SAMPLE_COUNT = 5;
@@ -18,6 +19,12 @@ const SAMPLE_COUNT = 5;
 const selftest = runSelfTest();
 console.log(`=== 検査の決まりの自己チェック：${selftest.total}件中 ${selftest.total - selftest.failures.length}件が期待どおり ===`);
 for (const f of selftest.failures) console.log(`× ${f.name}（期待：${f.expected}）→ ${f.errors.join(' / ') || 'NGなし'}`);
+
+// 復習機能（間違えた問題の出し入れ）が決まりどおりかを確かめる
+const reviewResults = runReviewTest();
+const reviewNg = reviewResults.filter((r) => !r.ok);
+console.log(`=== 復習機能のテスト：${reviewResults.length}件中 ${reviewResults.length - reviewNg.length}件OK ===`);
+for (const r of reviewNg) console.log(`× ${r.name}${r.detail ? `（${r.detail}）` : ''}`);
 
 let totalFailures = 0;
 const rows = [];
@@ -94,4 +101,4 @@ for (let i = 0; i < SAMPLE_COUNT; i++) {
   for (const line of q.explanation) console.log(`   ・${lineText(line)}`);
 }
 
-process.exitCode = totalFailures === 0 && selftest.failures.length === 0 ? 0 : 1;
+process.exitCode = totalFailures === 0 && selftest.failures.length === 0 && reviewNg.length === 0 ? 0 : 1;

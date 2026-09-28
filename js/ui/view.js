@@ -68,14 +68,19 @@ export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, 
     if (confirm('この回をやめますか？（この回の成績は記録されません）')) onQuit();
   });
   $('retry-button').addEventListener('click', () => onStart(lastMode));
+  $('review-button').addEventListener('click', () => onStart('review'));
   $('home-button').addEventListener('click', () => onHome());
   $('clear-history').addEventListener('click', () => {
     if (confirm('成績の記録をすべて消しますか？')) onClearHistory();
   });
 
-  function showHome({ modes, summary, settings }) {
+  function showHome({ modes, summary, settings, reviewCount }) {
     $('home-lead').textContent =
       `1回${settings.questionsPerSession}問・1問${settings.secondsPerQuestion}秒・${settings.calculator ? '電卓あり' : '電卓なし'}`;
+
+    // 復習リストに問題があるときだけ、復習ボタンを出す
+    $('review-box').hidden = reviewCount === 0;
+    $('review-button').textContent = `間違えた問題を復習（${reviewCount}問）`;
 
     $('mode-list').replaceChildren(
       ...modes.map((m) => {
@@ -184,6 +189,13 @@ export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, 
       Object.assign(row.insertCell(), { className: 'num', textContent: formatTime(c.timeMs / c.total) });
     }
     $('r-categories').replaceChildren(table);
+
+    // 復習の回は成績に記録しないので、そのことを伝え、ボタンも「もう一度復習する」にする
+    const isReview = result.mode === 'review';
+    $('r-note').hidden = result.recorded;
+    $('r-note').textContent = isReview ? `復習の回の成績は記録に残りません。復習リストの残り：${result.reviewLeft}問` : '';
+    $('retry-button').textContent = isReview ? 'もう一度復習する' : '同じ分野でもう一度';
+    $('retry-button').hidden = isReview && result.reviewLeft === 0;
     showScreen('result');
   }
 

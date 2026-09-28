@@ -1,10 +1,16 @@
 // クイズの進行役。10問を用意し、答えを採点し、タイマーを動かし、最後に結果をまとめる。
-// 問題づくりは generators/、選択肢は choices.js、時間は timer.js、集計は stats.js に任せる。画面のことは知らない。
-import { buildChoices } from './choices.js';
+// 問題づくりは generators/、選択肢は choices.js、時間は timer.js、集計は stats.js、復習リストは mistake-book.js に任せる。画面のことは知らない。
+//
+// 間違えた問題（時間切れも）は復習リストに入れ、復習で正解した問題はリストから消す。復習の回の成績は記録しない。
+import { buildChoices, shuffleChoices } from './choices.js';
 import { createTimer } from './timer.js';
 import { summarizeSession } from './stats.js';
+import { problemKey } from './mistake-book.js';
 
-export function createQuiz({ categoryIds, generate, settings, rand, saveResult, onTick, onTimeUp, now = Date.now }) {
+// 復習リストを使わないとき（テストなど）の代わり
+const NO_MISTAKE_BOOK = { add() {}, remove() {}, take: () => [], count: () => 0 };
+
+export function createQuiz({ categoryIds, generate, settings, rand, saveResult, onTick, onTimeUp, now = Date.now, mistakeBook = NO_MISTAKE_BOOK }) {
   const count = settings.questionsPerSession;
   const limitMs = settings.secondsPerQuestion * 1000;
   const timer = createTimer({
@@ -33,14 +39,13 @@ export function createQuiz({ categoryIds, generate, settings, rand, saveResult, 
   // 同じ回に同じ数字の問題が出ないようにする（場面の文章だけ違う問題もかぶりとみなす）
   function makeQuestions(ids) {
     const seen = new Set();
-    const keyOf = (p) => `${p.templateId}:${JSON.stringify(p.params)}`;
     return ids.map((id) => {
       let problem;
       for (let tries = 0; tries < 10; tries++) {
         problem = generate(id, rand, settings);
-        if (!seen.has(keyOf(problem))) break;
+        if (!seen.has(problemKey(problem))) break;
       }
-      seen.add(keyOf(problem));
+      seen.add(problemKey(problem));
       return buildChoices(problem, rand);
     });
   }
@@ -74,6 +79,18 @@ export function createQuiz({ categoryIds, generate, settings, rand, saveResult, 
     return show();
   }
 
+  // 復習の回を始める：復習リストから古い順に最大10問。選択肢は並べ替える（正解の位置を覚えないように）。
+  // リストが空なら null を返す
+  function startReview() {
+    const saved = mistakeBook.take(count);
+    if (saved.length === 0) return null;
+    mode = 'review';
+    questions = saved.map((q) => shuffleChoices(q, rand));
+    index = 0;
+    records = [];
+    return show();
+  }
+
   // choiceIndex が null なら時間切れ（不正解あつかい）
   function answer(choiceIndex) {
     if (answered) return null;
@@ -85,6 +102,10 @@ export function createQuiz({ categoryIds, generate, settings, rand, saveResult, 
     const correct = !timedOut && choiceIndex === q.answerIndex;
     lastChoice = choiceIndex;
     records.push({ category: q.category, correct, timedOut, timeMs: Math.min(now() - shownAt, limitMs) });
+
+    // 間違えた問題は復習リストへ。復習の回で正解した問題はリストから消す
+    if (!correct) mistakeBook.add(q);
+    else if (mode === 'review') mistakeBook.remove(q);
 
     return {
       correct,
@@ -120,10 +141,12 @@ export function createQuiz({ categoryIds, generate, settings, rand, saveResult, 
     return show();
   }
 
+  // 結果をまとめる。復習の回は、同じ問題の解き直しで正答率が高く出て苦手分野の判定が狂うので、成績には記録しない
   function finish() {
     const result = { date: new Date().toISOString(), mode, ...summarizeSession(records) };
-    saveResult(result);
-    return result;
+    const recorded = mode !== 'review';
+    if (recorded) saveResult(result);
+    return { ...result, recorded, reviewLeft: mistakeBook.count() };
   }
 
   // 途中でやめる（記録は残さない）
@@ -132,5 +155,5 @@ export function createQuiz({ categoryIds, generate, settings, rand, saveResult, 
     answered = true;
   }
 
-  return { start, answer, review, next, finish, abort };
+  return { start, startReview, answer, review, next, finish, abort };
 }

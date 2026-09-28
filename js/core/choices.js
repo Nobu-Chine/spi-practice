@@ -1,5 +1,6 @@
 // 4択を組み立てる係。問題づくり（generators/）が出した正解と「よくあるミス」から、選択肢を4つ作って並べ替える。
 // quiz.js と tests/check.js から呼ばれる。ミスの数が足りないときは、正解の近くの値で補う。値の比べ方・判定は values.js に任せる。
+// 復習のときは、保存しておいた問題の選択肢を並べ替えるだけ（shuffleChoices）。
 import { valueKey, isUsableValue, shiftedValue } from './values.js';
 
 const WRONG_COUNT = 3;
@@ -29,6 +30,16 @@ export function buildChoices(problem, rand) {
   const options = rand.shuffle([{ value: answer, mistake: null, correct: true }, ...wrongs]);
   return {
     ...problem,
+    choices: options.map(({ value, mistake }) => ({ value, mistake })),
+    answerIndex: options.findIndex((o) => o.correct),
+  };
+}
+
+// 作り終わった問題の選択肢を並べ替える（復習で、正解の位置を覚えてしまわないように）
+export function shuffleChoices(question, rand) {
+  const options = rand.shuffle(question.choices.map((c, i) => ({ ...c, correct: i === question.answerIndex })));
+  return {
+    ...question,
     choices: options.map(({ value, mistake }) => ({ value, mistake })),
     answerIndex: options.findIndex((o) => o.correct),
   };
