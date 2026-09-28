@@ -1,52 +1,30 @@
 // 4択を組み立てる係。問題づくり（generators/）が出した正解と「よくあるミス」から、選択肢を4つ作って並べ替える。
-// quiz.js と tests/check.js から呼ばれる。ミスの数が足りないときは、正解の近くの数で補う。
+// quiz.js と tests/check.js から呼ばれる。ミスの数が足りないときは、正解の近くの値で補う。値の比べ方・判定は values.js に任せる。
+import { valueKey, isUsableValue, shiftedValue } from './values.js';
 
 const WRONG_COUNT = 3;
 
-// 補充した選択肢は正解から「10%」か「2」の大きいほうまでしか離さない（tests/check.js もこの値で確かめる）
-export function fillerLimit(answer) {
-  return Math.max(answer * 0.1, 2);
-}
-
-// 選択肢として使える数：正の整数だけ
-function isUsable(value) {
-  return Number.isInteger(value) && value > 0;
-}
-
-// 補充用のずらし幅：正解の約5%以下で最大の「1・2・5 × 10のn乗」（100なら5、1020なら50）。
-// 1倍・2倍ずらしても正解の±10%以内に収まる
-function fillerStep(answer) {
-  let step = 1;
-  for (let unit = 1; unit <= answer; unit *= 10) {
-    for (const m of [1, 2, 5]) {
-      if (unit * m <= answer * 0.05) step = unit * m;
-    }
-  }
-  return step;
-}
-
 export function buildChoices(problem, rand) {
   const { answer } = problem;
-  const used = new Set([answer]);
+  const used = new Set([valueKey(answer)]);
   const wrongs = [];
 
   function add(value, mistake) {
-    if (wrongs.length < WRONG_COUNT && isUsable(value) && !used.has(value)) {
-      used.add(value);
+    if (wrongs.length < WRONG_COUNT && isUsableValue(value) && !used.has(valueKey(value))) {
+      used.add(valueKey(value));
       wrongs.push({ value, mistake });
     }
   }
 
   for (const w of problem.wrongs) add(w.value, w.mistake);
 
-  // 足りない分は正解の近くの数で補う。
+  // 足りない分は正解の近くの値で補う。
   // 正解をはさんで等間隔に並ぶと「真ん中が正解」とバレるので、先にランダムに選んだ片側（1倍→2倍）から使う
-  const step = fillerStep(answer);
   const side = rand.pick([1, -1]);
-  for (const offset of [side, side * 2, -side, -side * 2]) add(answer + step * offset, null);
+  for (const offset of [side, side * 2, -side, -side * 2]) add(shiftedValue(answer, offset), null);
   // 小さすぎる答えなどで上の4つが使えなかったときの予備（check.js で離れすぎを検出できる）。
-  // 答えが整数でないと永遠に見つからないので、回数に上限をつけて止める（check.js が「4つでない」と検出する）
-  for (let k = 3; wrongs.length < WRONG_COUNT && k < 100; k++) add(answer + step * k, null);
+  // 答えがおかしいと永遠に見つからないので、回数に上限をつけて止める（check.js が「4つでない」と検出する）
+  for (let k = 3; wrongs.length < WRONG_COUNT && k < 100; k++) add(shiftedValue(answer, k), null);
 
   const options = rand.shuffle([{ value: answer, mistake: null, correct: true }, ...wrongs]);
   return {
