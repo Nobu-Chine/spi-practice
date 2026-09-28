@@ -134,7 +134,7 @@ button {
 .fb-answer { font-weight: 600; }
 .mistake { padding: 8px 12px; border-radius: 8px; background: var(--ng-bg); font-size: 0.95rem; }
 .steps { margin: 8px 0 0; padding-left: 1.4em; }
-.steps li { margin: 4px 0; }
+.steps li { margin: 4px 0; white-space: pre-line; /* 解説の行の中の改行（推論の並び方の書き出し）を表示する */ }
 /* 解説の中の表は番号をつけず、カードの幅いっぱいに使う */
 .steps li.has-table { list-style: none; margin: 10px 0 10px -1.4em; }
 

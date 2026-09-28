@@ -6,6 +6,7 @@ import speed from './speed.js';
 import sets from './sets.js';
 import counting from './counting.js';
 import probability from './probability.js';
+import reasoning from './reasoning.js';
 
 export const categories = [
   ratio,
@@ -14,6 +15,7 @@ export const categories = [
   sets,
   counting,
   probability,
+  reasoning,
 ];
 
 // 指定した分野のテンプレートを1つ選んで、問題を1問作る。
