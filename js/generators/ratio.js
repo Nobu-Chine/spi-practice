@@ -120,8 +120,105 @@ const originalFromChange = {
   },
 };
 
+// C. 割合の割合：「全体のp%がX、Xのうちq%がY」のとき、Y は全体の何%か（または何人か）。%で聞く形と人数で聞く形を半分ずつ出す
+const NESTED_SCENES = [
+  { group: 'ある会社の社員', noun: '社員', outer: '男性', inner: '営業部の所属', target: '営業部の男性' },
+  { group: 'ある学校の生徒', noun: '生徒', outer: '部活動に入っている人', inner: '運動部員', target: '運動部員' },
+  { group: 'ある店の客', noun: '客', outer: '会員', inner: 'クーポンを使った人', target: 'クーポンを使った会員' },
+];
+// 電卓なしで使う%。2つを掛けた答えが整数の%になる組み合わせだけ使う
+const OUTER_PERCENTS = [20, 25, 30, 35, 40, 45, 50, 60, 70, 75, 80, 90];
+const INNER_PERCENTS = [5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 80];
+const NESTED_TOTALS = [100, 200, 300, 400, 500, 600, 800, 1000];
+
+// 小数で表す（40 → 0.4）。整数どうしで1回だけ割るので誤差が出ない
+const decimal = (percent) => String(percent / 100);
+
+function pickNested(rand, calculator, asCount) {
+  for (;;) {
+    const p = calculator ? rand.int(10, 90) : rand.pick(OUTER_PERCENTS);
+    const q = calculator ? rand.int(5, 95) : rand.pick(INNER_PERCENTS);
+    const answerPercent = (p * q) / 100;
+    if (!asCount) {
+      // %で聞く形：答えが整数の%になり、代表的なミス（%どうしの引き算）も正になる組み合わせ
+      if (Number.isInteger(answerPercent) && p > q) return { p, q };
+      continue;
+    }
+    // 人数で聞く形：途中の人数（Xの人数）も答えも整数になる全体の人数。
+    // p と q が同じだと「全体に q% を掛ける」ミスと「Xの人数で止める」ミスが同じ数になるので、違う値にする
+    const total = calculator ? rand.int(10, 200) * 10 : rand.pick(NESTED_TOTALS);
+    const outerCount = (total * p) / 100;
+    const count = (outerCount * q) / 100;
+    if (p !== q && Number.isInteger(outerCount) && Number.isInteger(count) && count > 0) {
+      return { p, q, total, outerCount, count };
+    }
+  }
+}
+
+const percentOfPercent = {
+  id: 'ratio-nested',
+  generate(rand, { calculator }) {
+    const s = rand.pick(NESTED_SCENES);
+    const asCount = rand.next() < 0.5;
+
+    if (!asCount) {
+      const { p, q } = pickNested(rand, calculator, false);
+      const answer = (p * q) / 100;
+      return {
+        params: { kind: 'percent', p, q },
+        text: `${s.group}のうち${p}%が${s.outer}で、${s.outer}のうち${q}%が${s.inner}である。${s.target}は${s.noun}全体の何%か。`,
+        answer,
+        unit: '%',
+        wrongs: [
+          { value: q, mistake: `${s.outer}の中での割合（${q}%）を、そのまま全体の割合として答えてしまった` },
+          { value: p - q, mistake: `${p}% − ${q}% と、%どうしを引き算してしまった` },
+          { value: p + q < 100 ? p + q : null, mistake: `${p}% ＋ ${q}% と、%どうしを足し算してしまった` },
+        ],
+        explanation: [
+          `${s.outer}は全体の ${p}% ＝ ${decimal(p)}`,
+          `${s.target}は${s.outer}の ${q}% なので、全体から見ると ${decimal(p)} × ${decimal(q)} ＝ ${decimal(answer)}`,
+          `${decimal(answer)} ＝ ${answer}%`,
+          'ポイント：「〜のうち◯%」は、その前の割合に掛ける。%どうしを足したり引いたりしない',
+        ],
+      };
+    }
+
+    // 代表的なミス（全体に内側の%をそのまま掛ける）も整数になる組み合わせを優先する
+    const { p, q, total, outerCount, count } = pickPreferring(
+      () => pickNested(rand, calculator, true),
+      ({ q, total }) => Number.isInteger((total * q) / 100),
+    );
+    return {
+      params: { kind: 'count', p, q, total },
+      text: `${s.group}${total}人のうち${p}%が${s.outer}で、${s.outer}のうち${q}%が${s.inner}である。${s.target}は何人か。`,
+      answer: count,
+      unit: '人',
+      wrongs: [
+        { value: (total * q) / 100, mistake: `${s.noun}全体の${total}人に、${q}%をそのまま掛けてしまった` },
+        { value: outerCount, mistake: `${s.outer}の人数を出したところで止めてしまった` },
+        { value: p > q ? (total * (p - q)) / 100 : null, mistake: `${p}% − ${q}% と、%どうしを引き算してから掛けてしまった` },
+      ],
+      explanation: [
+        `${s.outer}の人数 ＝ ${total} × ${decimal(p)} ＝ ${outerCount}人`,
+        `${s.target} ＝ ${outerCount} × ${decimal(q)} ＝ ${count}人`,
+        'ポイント：「〜のうち◯%」は、その前に出した人数に掛ける。全体の人数に直接掛けない',
+      ],
+    };
+  },
+  // 検算：%の形は p × q ÷ 100、人数の形は 全体 × p × q ÷ 10000 で一気に出す
+  solve({ kind, p, q, total }) {
+    return kind === 'percent' ? (p * q) / 100 : (total * p * q) / 10000;
+  },
+  // check.js が使う独自チェック：答えが外側の割合（人数）より小さいか
+  validate({ kind, p, q, total }) {
+    const inner = kind === 'percent' ? (p * q) / 100 : (total * p * q) / 10000;
+    const outer = kind === 'percent' ? p : (total * p) / 100;
+    return inner < outer ? [] : [`内側の割合が外側以上になっている: ${inner} / ${outer}`];
+  },
+};
+
 export default {
   id: 'ratio',
   label: '割合',
-  templates: [wholeFromPart, originalFromChange],
+  templates: [wholeFromPart, originalFromChange, percentOfPercent],
 };
