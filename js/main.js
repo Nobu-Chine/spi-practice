@@ -1,4 +1,4 @@
-// つなぎ役（司令塔）の係。アプリを開くと最初に動き、画面（view.js）・進行役（quiz.js）・保存係（history.js・mistakes.js）などをつなぐ。
+// つなぎ役（司令塔）の係。アプリを開くと最初に動き、画面（view.js）・進行役（quiz.js）・保存係（history.js・mistakes.js）・共有係（share.js）などをつなぐ。
 // 自分では計算も表示もせず、「ボタンが押されたら quiz.js を呼び、返ってきた結果を view.js に渡す」だけ。
 import { settings } from './config.js';
 import { categories, generateProblem } from './generators/index.js';
@@ -10,6 +10,7 @@ import { loadMistakes, saveMistakes } from './storage/mistakes.js';
 import { createMistakeBook } from './core/mistake-book.js';
 import { createView } from './ui/view.js';
 import { copyText } from './ui/clipboard.js';
+import { shareSite } from './ui/share.js';
 import { buildAskText } from './core/ask-text.js';
 
 const categoryIds = categories.map((c) => c.id);
@@ -62,6 +63,8 @@ const view = createView({
     const review = quiz.review();
     if (review) copyText(buildAskText(review)).then((ok) => view.showCopyResult(ok));
   },
+  // 共有メニューもボタンを押した流れの中でないと開けないので、押されたらすぐ呼ぶ
+  onShare: () => shareSite().then((result) => view.showShareResult(result)),
 });
 
 function showHome() {

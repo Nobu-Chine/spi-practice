@@ -44,10 +44,11 @@ function explanationItem(line) {
   return item;
 }
 
-export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, onHome, onClearHistory, onCopy }) {
+export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, onHome, onClearHistory, onCopy, onShare }) {
   const screens = { home: $('screen-home'), question: $('screen-question'), result: $('screen-result') };
   let lastMode = null;
   let copyMessageTimer = null;
+  let shareMessageTimer = null;
 
   function showScreen(name) {
     for (const [key, node] of Object.entries(screens)) node.hidden = key !== name;
@@ -64,6 +65,7 @@ export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, 
   });
   $('next-button').addEventListener('click', () => onNext());
   $('copy-button').addEventListener('click', () => onCopy());
+  $('share-button').addEventListener('click', () => onShare());
   $('quit-button').addEventListener('click', () => {
     if (confirm('この回をやめますか？（この回の成績は記録されません）')) onQuit();
   });
@@ -164,6 +166,17 @@ export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, 
     copyMessageTimer = setTimeout(clearCopyMessage, COPY_MESSAGE_MS);
   }
 
+  // 共有メニューを開いたときは画面に何も出さない（メニュー自体が結果になるため）
+  function showShareResult(result) {
+    if (result === 'shared') return;
+    const message = $('share-message');
+    const ok = result === 'copied';
+    message.textContent = ok ? 'URLをコピーしました' : 'コピーできませんでした';
+    message.className = `copy-message ${ok ? 'ok' : 'ng'}`;
+    clearTimeout(shareMessageTimer);
+    shareMessageTimer = setTimeout(() => { message.textContent = ''; }, COPY_MESSAGE_MS);
+  }
+
   function clearCopyMessage() {
     clearTimeout(copyMessageTimer);
     $('copy-message').textContent = '';
@@ -199,5 +212,5 @@ export function createView({ categoryLabels, onStart, onChoose, onNext, onQuit, 
     showScreen('result');
   }
 
-  return { showHome, showQuestion, showTime, showFeedback, showCopyResult, showResult };
+  return { showHome, showQuestion, showTime, showFeedback, showCopyResult, showShareResult, showResult };
 }
