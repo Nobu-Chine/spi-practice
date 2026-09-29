@@ -47,9 +47,12 @@ export function runReviewTest() {
 
   // 1. 通常の回：間違えた問題・時間切れの問題だけが入り、正解した問題は入らない。
   // 正解と不正解の両方を必ず含めるため、5回（50問）続けて、選ぶ位置も変えていく
+  // 50問の中で同じ問題（テンプレートと数字が同じ）に2回間違えることもあるので、数は「ちがう問題の数」で比べる
   {
     const store = fakeStorage();
-    const book = createMistakeBook(store);
+    const realBook = createMistakeBook(store);
+    const addedKeys = []; // quiz.js が「入れて」と頼んだ問題の印（頼まれた回数を数えるため）
+    const book = { ...realBook, add: (q) => { addedKeys.push(problemKey(q)); realBook.add(q); } };
     const wrongTexts = [];
     const rightTexts = [];
     let timedOut = 0;
@@ -69,13 +72,32 @@ export function runReviewTest() {
       lastResult = quiz.finish();
       savedCount += saved.length;
     }
-    const savedTexts = store.load().map((p) => p.text);
+    const stored = store.load();
+    const storedKeys = stored.map(problemKey);
+    const storedTexts = stored.map((p) => p.text);
+    const uniqueAdded = new Set(addedKeys);
+    // 同じ問題に正解した回と間違えた回の両方があれば、リストに入っているのが正しいので「正解した問題」から除く
+    const onlyRight = rightTexts.filter((t) => !wrongTexts.includes(t));
     check('テストに正解と不正解の両方が含まれている', rightTexts.length > 0 && wrongTexts.length > 0, `正解${rightTexts.length}問・不正解${wrongTexts.length}問（うち時間切れ${timedOut}問）`);
-    check('間違えた問題・時間切れの問題が全部入る', wrongTexts.every((t) => savedTexts.includes(t)), `入った${savedTexts.length}問`);
-    check('正解した問題は入らない', rightTexts.every((t) => !savedTexts.includes(t)));
-    check('入った数が間違えた数と同じ', savedTexts.length === wrongTexts.length);
+    check('間違えるたびに、リストへ入れる操作が1回ずつ呼ばれる', addedKeys.length === wrongTexts.length, `間違い${wrongTexts.length}回・入れる操作${addedKeys.length}回`);
+    check('間違えた問題・時間切れの問題が全部入る', addedKeys.every((k) => storedKeys.includes(k)), `入った${stored.length}問`);
+    check('正解した問題は入らない', onlyRight.every((t) => !storedTexts.includes(t)));
+    check('入った数が「ちがう問題の数」と同じ（同じ問題は1回だけ）', stored.length === uniqueAdded.size, `ちがう問題${uniqueAdded.size}問`);
     check('通常の回の成績は記録される', savedCount === 5 && lastResult.recorded === true);
-    check('結果に復習リストの残りの数がつく', lastResult.reviewLeft === wrongTexts.length);
+    check('結果に復習リストの残りの数がつく', lastResult.reviewLeft === stored.length);
+  }
+
+  // 1b. 同じ問題に2回間違えても、リストには1回しか入らない（偶然に頼らず、同じ問題を2回出して確かめる）
+  {
+    const store = fakeStorage();
+    const book = createMistakeBook(store);
+    const rand = createRandom(13);
+    const problem = buildChoices(generateProblem('probability', rand, SETTINGS), rand);
+    book.add(problem); // 1回目に間違えた
+    const { quiz } = makeQuiz(book, 17);
+    const q = quiz.startReview();
+    quiz.answer((correctIndexOf(q, problem.answer) + 1) % 4); // 復習でも間違えた（2回目）
+    check('同じ問題に2回間違えても、リストには1回だけ', book.count() === 1, `入った数 ${book.count()}`);
   }
 
   // 2. 同じ問題は2回入らない

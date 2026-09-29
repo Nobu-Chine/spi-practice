@@ -22,15 +22,17 @@ function answerText(indexes) {
   return names.length === 1 ? `${names[0]}だけ` : names.join('と');
 }
 
-// ==== 共通の流れ（パズル puzzle = { worlds, holds, randomCondition, statements, word }） ====
-// worlds：考えられるもの全部（並び方・内訳）　holds(条件か推論, ひとつ)：成り立つか　word：解説での呼び方（「並び方」「内訳」）
+// ==== 共通の流れ（パズル puzzle = { worlds, holds, randomCondition, statements, word, maxConditions? }） ====
+// worlds：考えられるもの全部（並び方・内訳・部屋割り）　holds(条件か推論, ひとつ)：成り立つか　word：解説での呼び方（「並び方」など）
+// maxConditions：条件をいくつまで使うか（書かなければ4個。考えられるものが多い型は多めにする）
 
 // 条件を足していき、条件に合うものが MIN〜MAX 通りになった組を返す
 function pickConditions(puzzle, rand, hidden) {
+  const maxConditions = puzzle.maxConditions ?? 4;
   for (let tries = 0; tries < 200; tries++) {
     const conditions = [];
     let matching = puzzle.worlds;
-    for (let step = 0; step < 60 && conditions.length < 4 && matching.length > MAX_MATCHES; step++) {
+    for (let step = 0; step < 60 && conditions.length < maxConditions && matching.length > MAX_MATCHES; step++) {
       const c = puzzle.randomCondition(rand, hidden);
       if (!c) continue;
       const next = matching.filter((w) => puzzle.holds(c, w));
@@ -58,8 +60,12 @@ function dropRedundant(puzzle, conditions) {
 
 // 条件1つだけで正誤が決まる推論か（条件の言い換え・すぐ否定できるもの）
 function decidedByOneCondition(puzzle, statement, conditions) {
-  return conditions.some((c) => {
-    const withC = puzzle.worlds.filter((w) => puzzle.holds(c, w));
+  return decidedGiven(puzzle, statement, conditions.map((c) => puzzle.worlds.filter((w) => puzzle.holds(c, w))));
+}
+
+// 上と同じ判定。条件ごとに「その条件だけに合うもの」を先に数えておいたものを使う（推論の候補が多い型でも速くするため）
+function decidedGiven(puzzle, statement, worldsPerCondition) {
+  return worldsPerCondition.some((withC) => {
     const truth = withC.map((w) => puzzle.holds(statement, w));
     return truth.every(Boolean) || truth.every((t) => !t);
   });
@@ -76,8 +82,9 @@ function classify(puzzle, statement, matching) {
 const ALWAYS_COUNTS = [0, 1, 1, 1, 2, 2, 2, 3];
 
 function pickStatements(puzzle, rand, conditions, matching) {
+  const worldsPerCondition = conditions.map((c) => puzzle.worlds.filter((w) => puzzle.holds(c, w)));
   const usable = puzzle.statements
-    .filter((s) => !decidedByOneCondition(puzzle, s, conditions))
+    .filter((s) => !decidedGiven(puzzle, s, worldsPerCondition))
     .map((s) => ({ ...s, kind: classify(puzzle, s, matching) }));
   const always = rand.shuffle(usable.filter((s) => s.kind === 'always'));
   const sometimes = rand.shuffle(usable.filter((s) => s.kind === 'sometimes'));
@@ -429,8 +436,150 @@ const breakdown = {
   validate: (params) => validatePuzzle(BREAKDOWN_PUZZLES[params.total], params),
 };
 
+// ==== C. 位置（2階建てアパートの部屋割り） ====
+// 部屋は6つ。番号 0〜2 が1階の左から（101・102・103号室）、3〜5 が2階の左から（201・202・203号室）。201は101の真上。
+// 部屋割りは「部屋の番号順に、住んでいる人を並べたもの」
+
+const TENANTS = ['A', 'B', 'C', 'D', 'E', 'F'];
+const COLUMN_NAMES = ['左端', '真ん中', '右端'];
+const roomNumber = (i) => (i < 3 ? 101 + i : 201 + i - 3);
+
+function allAssignments() {
+  const result = [];
+  (function walk(rest, picked) {
+    if (rest.length === 0) return result.push(picked);
+    rest.forEach((p, i) => walk([...rest.slice(0, i), ...rest.slice(i + 1)], [...picked, p]));
+  })(TENANTS, []);
+  return result;
+}
+
+// 人の部屋の番号（0〜5）・階（1か2）・左右の位置（0〜2）
+const roomOf = (w, p) => w.indexOf(p);
+const floorOf = (w, p) => (roomOf(w, p) < 3 ? 1 : 2);
+const columnOf = (w, p) => roomOf(w, p) % 3;
+
+const apartmentPuzzle = {
+  word: '部屋割り',
+  worlds: allAssignments(),
+  maxConditions: 5,
+  holds(item, w) {
+    switch (item.type) {
+      case 'above': return floorOf(w, item.x) === 2 && floorOf(w, item.y) === 1 && columnOf(w, item.x) === columnOf(w, item.y);
+      case 'sameFloor': return floorOf(w, item.x) === floorOf(w, item.y);
+      case 'diffFloor': return floorOf(w, item.x) !== floorOf(w, item.y);
+      case 'nextTo': return floorOf(w, item.x) === floorOf(w, item.y) && Math.abs(columnOf(w, item.x) - columnOf(w, item.y)) === 1;
+      case 'floor': return floorOf(w, item.x) === item.f;
+      case 'column': return columnOf(w, item.x) === item.c;
+      case 'room': return roomOf(w, item.x) === item.r;
+      default: throw new Error(`知らない種類: ${item.type}`);
+    }
+  },
+  // 本当の部屋割り hidden で成り立つ条件を1つ作る（作れない組み合わせなら null）。
+  // 入れ替えても意味が同じ条件（同じ階・違う階・隣どうし）は、読みやすいよう A→F の順で書く
+  randomCondition(rand, hidden) {
+    const pick = this.pickCondition(rand, hidden);
+    if (pick && ['sameFloor', 'diffFloor', 'nextTo'].includes(pick.type) && pick.x > pick.y) return { ...pick, x: pick.y, y: pick.x };
+    return pick;
+  },
+  pickCondition(rand, hidden) {
+    const [x, y] = rand.shuffle(TENANTS);
+    const type = rand.pick(['above', 'above', 'sameFloor', 'diffFloor', 'nextTo', 'nextTo', 'floor', 'column']);
+    const room = roomOf(hidden, x);
+    if (type === 'above') {
+      // x の真上か真下の人と組にする（上にいる人を先に書く）
+      const other = hidden[room < 3 ? room + 3 : room - 3];
+      return room >= 3 ? { type, x, y: other } : { type, x: other, y: x };
+    }
+    if (type === 'sameFloor') return floorOf(hidden, x) === floorOf(hidden, y) ? { type, x, y } : null;
+    if (type === 'diffFloor') return floorOf(hidden, x) !== floorOf(hidden, y) ? { type, x, y } : null;
+    if (type === 'nextTo') {
+      const neighbors = [room - 1, room + 1].filter((r) => r >= 0 && r <= 5 && Math.floor(r / 3) === Math.floor(room / 3));
+      return { type, x, y: hidden[rand.pick(neighbors)] };
+    }
+    if (type === 'floor') return { type, x, f: floorOf(hidden, x) };
+    return { type: 'column', x, c: columnOf(hidden, x) };
+  },
+  statements: (() => {
+    const list = [];
+    for (const x of TENANTS) {
+      for (let r = 0; r < 6; r++) list.push({ type: 'room', x, r });
+      for (const f of [1, 2]) list.push({ type: 'floor', x, f });
+      for (let c = 0; c < 3; c++) list.push({ type: 'column', x, c });
+      for (const y of TENANTS) {
+        if (x === y) continue;
+        list.push({ type: 'above', x, y });
+        if (x < y) list.push({ type: 'sameFloor', x, y }, { type: 'nextTo', x, y });
+      }
+    }
+    return list;
+  })(),
+};
+
+const APARTMENT_INTRO = [
+  'A〜Fの6人が、2階建てのアパートに1人1部屋ずつ住んでいる。',
+  '1階は左から101・102・103号室、2階は左から201・202・203号室で、201号室は101号室の真上にある。次のことがわかっている。',
+].join('\n');
+
+const apartment = {
+  id: 'reasoning-apartment',
+  generate(rand) {
+    for (;;) {
+      const hidden = rand.shuffle(TENANTS);
+      const { conditions, matching } = pickConditions(apartmentPuzzle, rand, hidden);
+      const statements = pickStatements(apartmentPuzzle, rand, conditions, matching);
+      if (!statements) continue;
+      const conditionText = (c) => {
+        if (c.type === 'above') return `${c.x}の部屋は${c.y}の部屋の真上にある`;
+        if (c.type === 'sameFloor') return `${c.x}と${c.y}は同じ階に住んでいる`;
+        if (c.type === 'diffFloor') return `${c.x}と${c.y}は違う階に住んでいる`;
+        if (c.type === 'nextTo') return `${c.x}と${c.y}の部屋は隣どうしである`;
+        if (c.type === 'floor') return `${c.x}は${c.f}階に住んでいる`;
+        return `${c.x}の部屋は${COLUMN_NAMES[c.c]}にある`;
+      };
+      const statementText = (st) => {
+        if (st.type === 'room') return `${st.x}は${roomNumber(st.r)}号室に住んでいる`;
+        if (st.type === 'floor') return `${st.x}は${st.f}階に住んでいる`;
+        if (st.type === 'column') return `${st.x}の部屋は${COLUMN_NAMES[st.c]}である`;
+        if (st.type === 'above') return `${st.x}の部屋は${st.y}の部屋の真上である`;
+        if (st.type === 'sameFloor') return `${st.x}と${st.y}は同じ階である`;
+        return `${st.x}と${st.y}の部屋は隣どうしである`;
+      };
+      return buildProblem(apartmentPuzzle, {
+        intro: APARTMENT_INTRO,
+        conditions,
+        statements,
+        matching,
+        conditionText,
+        statementText,
+        worldText: (w) => `2階 ${w[3]}・${w[4]}・${w[5]} ／ 1階 ${w[0]}・${w[1]}・${w[2]}`,
+        listHeader: '条件に合う部屋割り（それぞれ左から）',
+      });
+    }
+  },
+  // 検算：問題を作る側とは別に書いた判定で、720通りの部屋割りを号室の数字で全部たどる
+  solve({ conditions, statements }) {
+    const ok = (item, w) => {
+      const num = Object.fromEntries(w.map((p, i) => [p, roomNumber(i)])); // 例：{ A: 203, ... }
+      const floor = (p) => Math.floor(num[p] / 100);
+      const col = (p) => num[p] % 100; // 1〜3（左から）
+      if (item.type === 'above') return num[item.x] - num[item.y] === 100;
+      if (item.type === 'sameFloor') return floor(item.x) === floor(item.y);
+      if (item.type === 'diffFloor') return floor(item.x) !== floor(item.y);
+      if (item.type === 'nextTo') return floor(item.x) === floor(item.y) && Math.abs(num[item.x] - num[item.y]) === 1;
+      if (item.type === 'floor') return floor(item.x) === item.f;
+      if (item.type === 'column') return col(item.x) === item.c + 1;
+      if (item.type === 'room') return num[item.x] === roomNumber(item.r);
+      return false;
+    };
+    const matching = apartmentPuzzle.worlds.filter((w) => conditions.every((c) => ok(c, w)));
+    const sure = statements.map((st, i) => (matching.every((w) => ok(st, w)) ? i : -1)).filter((i) => i >= 0);
+    return label(answerText(sure));
+  },
+  validate: (params) => validatePuzzle(apartmentPuzzle, params),
+};
+
 export default {
   id: 'reasoning',
   label: '推論',
-  templates: [ranking, breakdown],
+  templates: [ranking, breakdown, apartment],
 };
