@@ -22,9 +22,11 @@ function answerText(indexes) {
   return names.length === 1 ? `${names[0]}だけ` : names.join('と');
 }
 
-// ==== 共通の流れ（パズル puzzle = { worlds, holds, randomCondition, statements, word, maxConditions? }） ====
+// ==== 共通の流れ（パズル puzzle = { worlds, holds, randomCondition, statements, word, maxConditions?, minMatches?, maxMatches? }） ====
 // worlds：考えられるもの全部（並び方・内訳・部屋割り）　holds(条件か推論, ひとつ)：成り立つか　word：解説での呼び方（「並び方」など）
 // maxConditions：条件をいくつまで使うか（書かなければ4個。考えられるものが多い型は多めにする）
+// minMatches・maxMatches：条件に合うものが何通りならよいか（書かなければ2〜6通り）
+// sameSubject(推論a, 推論b)：同じことを裏表で聞く推論か（書けば、そういう推論どうしを1問に一緒に出さない）
 
 // 条件を足していき、条件に合うものが MIN〜MAX 通りになった組を返す
 function pickConditions(puzzle, rand, hidden) {
@@ -98,7 +100,11 @@ function pickStatements(puzzle, rand, conditions, matching) {
     if (!pool.length) return null;
     others.push(pool.shift());
   }
-  return rand.shuffle([...always.slice(0, want), ...others]);
+  const picked = [...always.slice(0, want), ...others];
+  // 同じことを裏表で聞く推論（「Cは正直者」と「Cはうそつき」など）が一緒に出ると、片方で両方が決まってしまうので選び直す。
+  // この決まりはパズルに sameSubject があるときだけ使う
+  if (puzzle.sameSubject && picked.some((a, i) => picked.some((b, j) => i < j && puzzle.sameSubject(a, b)))) return null;
+  return rand.shuffle(picked);
 }
 
 // 正解以外の7通りの組それぞれに、どんなミスでそれを選ぶかの説明をつける。
@@ -126,8 +132,10 @@ function buildWrongs(puzzle, statements, correct, matching) {
   return results.sort((a, b) => a.score - b.score).map(({ value, mistake }) => ({ value, mistake }));
 }
 
-// 条件・推論・誤答・解説をまとめて1問にする（どの型でも同じ形）
-function buildProblem(puzzle, { intro, conditions, statements, matching, conditionText, statementText, worldText, listHeader }) {
+// 条件・推論・誤答・解説をまとめて1問にする（どの型でも同じ形）。
+// conditionLine：条件1つを問題文の1行にする書き方（書かなければ「・条件」）　hint：解説の最初に置く考え方（書かなければなし）
+function buildProblem(puzzle, { intro, conditions, statements, matching, conditionText, statementText, worldText, listHeader, conditionLine, hint }) {
+  const line = conditionLine ?? ((c) => `・${conditionText(c)}`);
   const { word } = puzzle;
   const correct = statements.map((st, i) => (st.kind === 'always' ? i : -1)).filter((i) => i >= 0);
   const result = (st) => {
@@ -145,7 +153,7 @@ function buildProblem(puzzle, { intro, conditions, statements, matching, conditi
     },
     text: [
       intro,
-      ...conditions.map((c) => `・${conditionText(c)}`),
+      ...conditions.map(line),
       '次の推論ア、イ、ウのうち、必ず正しいものはどれか。',
       ...statements.map((st, i) => `${MARKS[i]}：${statementText(st)}`),
     ].join('\n'),
@@ -153,6 +161,7 @@ function buildProblem(puzzle, { intro, conditions, statements, matching, conditi
     unit: '',
     wrongs: buildWrongs(puzzle, statements, correct, matching),
     explanation: [
+      ...(hint ? [hint] : []),
       // 書き出しは1つの行にまとめる（解説の番号と①②が2重にならないように、行の中で改行する）
       [`${listHeader}は、次の${matching.length}通り`, ...matching.map((w, i) => `${circled(i)} ${worldText(w)}`)].join('\n'),
       ...statements.map((st, i) => `${MARKS[i]}「${statementText(st)}」：${result(st)}`),
@@ -167,11 +176,15 @@ function validatePuzzle(puzzle, { conditions, statements }) {
   const errors = [];
   const matchCount = (list) => puzzle.worlds.filter((w) => list.every((c) => puzzle.holds(c, w))).length;
   const count = matchCount(conditions);
-  if (count < MIN_MATCHES || count > MAX_MATCHES) errors.push(`条件に合う${puzzle.word}が${count}通り`);
+  const [min, max] = [puzzle.minMatches ?? MIN_MATCHES, puzzle.maxMatches ?? MAX_MATCHES];
+  if (count < min || count > max) errors.push(`条件に合う${puzzle.word}が${count}通り`);
   statements.forEach((st, i) => {
     if (decidedByOneCondition(puzzle, st, conditions)) errors.push(`${MARKS[i]}が条件1つだけで決まる（言い換え）`);
   });
   if (new Set(statements.map((st) => JSON.stringify(st))).size !== statements.length) errors.push('同じ推論が2回出ている');
+  if (puzzle.sameSubject && statements.some((a, i) => statements.some((b, j) => i < j && puzzle.sameSubject(a, b)))) {
+    errors.push('同じことを裏表で聞く推論が一緒に出ている');
+  }
   conditions.forEach((c, i) => {
     if (matchCount(conditions.filter((_, j) => j !== i)) === count) errors.push(`条件${i + 1}はほかの条件からわかる（なくても同じ）`);
   });
@@ -578,8 +591,142 @@ const apartment = {
   validate: (params) => validatePuzzle(apartmentPuzzle, params),
 };
 
+// ==== D. 正誤（正直者とうそつき） ====
+// 4人それぞれが正直者（true）かうそつき（false）。組み合わせは [Aが正直者か, Bが…, Cが…, Dが…] の16通り。
+// 条件は「全員が1回ずつ話した発言」。正直者の発言は本当、うそつきの発言はうそになる組み合わせだけが残る。
+// 絞りきれないときだけ「正直者は◯人」を足す。うそつき問題は答えが1通りに決まることが多いので、1〜4通りまで許す
+
+const SPEAKERS = ['A', 'B', 'C', 'D'];
+const honestWorlds = Array.from({ length: 16 }, (_, bits) => SPEAKERS.map((_, i) => Boolean(bits & (1 << i))));
+const liarCountOf = (w) => w.filter((h) => !h).length;
+
+// 発言の中身（claim）が、ある組み合わせで本当か
+function claimTrue(claim, w) {
+  if (claim.type === 'honest') return w[SPEAKERS.indexOf(claim.q)];
+  if (claim.type === 'liar') return !w[SPEAKERS.indexOf(claim.q)];
+  return liarCountOf(w) === claim.k; // liarCount：うそつきの人数
+}
+
+const honestyPuzzle = {
+  word: '組み合わせ',
+  worlds: honestWorlds,
+  minMatches: 1,
+  maxMatches: 4,
+  holds(item, w) {
+    switch (item.type) {
+      // 発言：話した人が正直者なら中身は本当、うそつきなら中身はうそ
+      case 'says': return w[SPEAKERS.indexOf(item.p)] === claimTrue(item.claim, w);
+      case 'honestCount': return w.filter(Boolean).length === item.k;
+      case 'isHonest': return w[SPEAKERS.indexOf(item.x)];
+      case 'isLiar': return !w[SPEAKERS.indexOf(item.x)];
+      case 'liarsAre': return liarCountOf(w) === item.k;
+      default: throw new Error(`知らない種類: ${item.type}`);
+    }
+  },
+  statements: [
+    ...SPEAKERS.map((x) => ({ type: 'isHonest', x })),
+    ...SPEAKERS.map((x) => ({ type: 'isLiar', x })),
+    ...[1, 2, 3].map((k) => ({ type: 'liarsAre', k })),
+  ],
+  // 同じことを聞く推論か：同じ人が正直者かうそつきか／うそつきの人数
+  sameSubject(a, b) {
+    if (a.type === 'liarsAre' || b.type === 'liarsAre') return a.type === b.type;
+    return a.x === b.x;
+  },
+};
+
+// 本当の組み合わせ hidden で、話した人 p が言えること（正直者なら本当のこと、うそつきならうそ）を1つ選ぶ
+function randomSpeech(rand, hidden, p) {
+  const others = SPEAKERS.filter((q) => q !== p);
+  const claims = [
+    ...others.map((q) => ({ type: 'honest', q })),
+    ...others.map((q) => ({ type: 'liar', q })),
+    ...[0, 1, 2, 3].map((k) => ({ type: 'liarCount', k })),
+  ];
+  const sayable = claims.filter((claim) => claimTrue(claim, hidden) === hidden[SPEAKERS.indexOf(p)]);
+  return { type: 'says', p, claim: rand.pick(sayable) };
+}
+
+// 全員の発言（と、必要なら「正直者は◯人」）を作る。どの条件も外すと結果が変わる（無駄がない）組だけを使う
+function pickHonestyConditions(rand, hidden) {
+  const count = (list) => honestWorlds.filter((w) => list.every((c) => honestyPuzzle.holds(c, w))).length;
+  for (let tries = 0; tries < 500; tries++) {
+    const conditions = SPEAKERS.map((p) => randomSpeech(rand, hidden, p));
+    // 2人が同じことを言うと問題文が単調になるので、4人の発言は全部ちがう内容にする
+    if (new Set(conditions.map((c) => JSON.stringify(c.claim))).size !== SPEAKERS.length) continue;
+    if (count(conditions) > honestyPuzzle.maxMatches) conditions.push({ type: 'honestCount', k: hidden.filter(Boolean).length });
+    const matches = count(conditions);
+    if (matches < honestyPuzzle.minMatches || matches > honestyPuzzle.maxMatches) continue;
+    const allNeeded = conditions.every((c) => count(conditions.filter((k) => k !== c)) !== matches);
+    if (!allNeeded) continue;
+    return { conditions, matching: honestWorlds.filter((w) => conditions.every((c) => honestyPuzzle.holds(c, w))) };
+  }
+  throw new Error('発言を作れなかった');
+}
+
+const HONESTY_INTRO = [
+  'A、B、C、Dの4人は、それぞれ正直者かうそつきのどちらかである。',
+  '正直者はいつも本当のことを言い、うそつきはいつもうそを言う。4人は次のように話した。',
+].join('\n');
+
+const claimText = (claim) => {
+  if (claim.type === 'honest') return `${claim.q}は正直者だ`;
+  if (claim.type === 'liar') return `${claim.q}はうそつきだ`;
+  return claim.k === 0 ? 'この中にうそつきはいない' : `この中にうそつきは${claim.k}人いる`;
+};
+
+const honesty = {
+  id: 'reasoning-honesty',
+  generate(rand) {
+    for (;;) {
+      // 本当の組み合わせ：うそつきは1〜3人
+      const liars = rand.int(1, 3);
+      const hidden = rand.shuffle(SPEAKERS.map((_, i) => i >= liars));
+      const { conditions, matching } = pickHonestyConditions(rand, hidden);
+      const statements = pickStatements(honestyPuzzle, rand, conditions, matching);
+      if (!statements) continue;
+      const names = (w, want) => SPEAKERS.filter((_, i) => w[i] === want).join('・') || 'いない';
+      return buildProblem(honestyPuzzle, {
+        intro: HONESTY_INTRO,
+        conditions,
+        statements,
+        matching,
+        conditionText: (c) => (c.type === 'says' ? `${c.p}「${claimText(c.claim)}」` : `4人のうち、正直者は${c.k}人である`),
+        conditionLine: (c) => (c.type === 'says' ? `${c.p}「${claimText(c.claim)}」` : `また、4人のうち正直者は${c.k}人であることがわかっている。`),
+        statementText: (st) => {
+          if (st.type === 'isHonest') return `${st.x}は正直者である`;
+          if (st.type === 'isLiar') return `${st.x}はうそつきである`;
+          return `うそつきは${st.k}人である`;
+        },
+        worldText: (w) => `正直者：${names(w, true)} ／ うそつき：${names(w, false)}`,
+        listHeader: '全員の発言と食い違わない組み合わせ',
+        hint: '考え方：だれか1人を正直者（またはうそつき）と仮に決め、その人の発言から順にほかの人を決めていく。全員の発言と食い違わない組み合わせだけを残す',
+      });
+    }
+  },
+  // 検算：問題を作る側とは別に書いた判定で、正直者・うそつきの16通りを全部たどる
+  solve({ conditions, statements }) {
+    const ok = (item, honest) => {
+      const liarsCount = SPEAKERS.filter((p) => !honest[p]).length;
+      const said = (claim) => (claim.type === 'honest' ? honest[claim.q] === true : claim.type === 'liar' ? honest[claim.q] === false : liarsCount === claim.k);
+      if (item.type === 'says') return honest[item.p] ? said(item.claim) : !said(item.claim);
+      if (item.type === 'honestCount') return 4 - liarsCount === item.k;
+      if (item.type === 'isHonest') return honest[item.x] === true;
+      if (item.type === 'isLiar') return honest[item.x] === false;
+      if (item.type === 'liarsAre') return liarsCount === item.k;
+      return false;
+    };
+    const all = [];
+    for (let bits = 0; bits < 16; bits++) all.push(Object.fromEntries(SPEAKERS.map((p, i) => [p, (bits >> i) % 2 === 1])));
+    const matching = all.filter((h) => conditions.every((c) => ok(c, h)));
+    const sure = statements.map((st, i) => (matching.every((h) => ok(st, h)) ? i : -1)).filter((i) => i >= 0);
+    return label(answerText(sure));
+  },
+  validate: (params) => validatePuzzle(honestyPuzzle, params),
+};
+
 export default {
   id: 'reasoning',
   label: '推論',
-  templates: [ranking, breakdown, apartment],
+  templates: [ranking, breakdown, apartment, honesty],
 };

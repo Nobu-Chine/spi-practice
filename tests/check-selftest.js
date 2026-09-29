@@ -107,6 +107,9 @@ const CASES = [
   ['解説に [object Object] が入っている', INT, (q) => { q.explanation.push(`${{}}`); }, '文章が壊れている'],
   ['解説が空', INT, (q) => { q.explanation = []; }, '解説が空'],
   ['損益算で赤字の組み合わせ', 'profit-amount', (q) => { q.params.a = 10; q.params.b = 30; }, '赤字'],
+  ['推論（正誤）で裏表の推論が一緒に出る', 'reasoning-honesty', (q) => {
+    q.params.statements = [{ type: 'isHonest', x: 'A' }, { type: 'isLiar', x: 'A' }, { type: 'liarsAre', k: 2 }];
+  }, '裏表'],
   ['コピー文が崩れる（数字の前に { が付く）', INT, (q) => { q.prefix = '{'; }, 'コピー文'],
 ];
 

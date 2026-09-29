@@ -70,7 +70,7 @@ js/
 │  ├─ sets.js         集合
 │  ├─ counting.js     場合の数
 │  ├─ probability.js  確率
-│  └─ reasoning.js    推論（順位・内訳・位置）
+│  └─ reasoning.js    推論（順位・内訳・位置・正誤）
 └─ storage/
    ├─ history.js      成績の保存と読み込みだけ
    └─ mistakes.js     復習リストの保存と読み込みだけ
